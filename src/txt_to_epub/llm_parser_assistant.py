@@ -527,6 +527,123 @@ JSON格式：
                 'error': str(e)
             }
 
+    def generate_chapter_titles_batch(
+        self,
+        chapters_info: List[Dict[str, str]],
+        language: str = 'chinese',
+        max_content_length: int = 400
+    ) -> List[Dict]:
+        """
+        批量生成章节标题（一次 LLM 调用处理多个章节）
+
+        :param chapters_info: 章节信息列表，每项包含 {"number": "第X章", "content": "内容..."}
+        :param language: 语言类型
+        :param max_content_length: 每个章节用于分析的最大内容长度
+        :return: 标题结果列表，每项包含 {"title": "标题", "confidence": 0.9}
+        """
+        if not chapters_info:
+            return []
+
+        logger.info(f"LLM批量生成 {len(chapters_info)} 个章节标题...")
+
+        # 限制批量大小，避免超过 token 限制
+        batch_size = 50  # 每次最多处理50个章节
+        all_results = []
+
+        for batch_start in range(0, len(chapters_info), batch_size):
+            batch = chapters_info[batch_start:batch_start + batch_size]
+
+            # 构建批量章节列表
+            chapters_text = []
+            for i, ch_info in enumerate(batch, start=batch_start + 1):
+                content_sample = ch_info['content'][:max_content_length].strip()
+                chapters_text.append(f"{i}. {ch_info['number']}\n内容: {content_sample[:200]}...")
+
+            chapters_list = "\n\n".join(chapters_text)
+
+            if language == 'english':
+                prompt = f"""Generate concise titles (3-8 words) for the following chapters based on their content:
+
+{chapters_list}
+
+Requirements:
+- Title should be meaningful and reflect the content
+- Avoid dialogue quotes
+- Keep titles concise
+
+JSON response format:
+{{
+  "titles": [
+    {{"index": 1, "title": "generated title", "confidence": 0.0-1.0}},
+    {{"index": 2, "title": "generated title", "confidence": 0.0-1.0}}
+  ]
+}}"""
+            else:
+                prompt = f"""为以下章节生成简洁标题（3-12字），基于章节内容：
+
+{chapters_list}
+
+要求：
+- 标题要有意义，反映内容
+- 避免对话引号
+- 保持简洁
+
+JSON格式：
+{{
+  "titles": [
+    {{"index": 1, "title": "生成的标题", "confidence": 0.0-1.0}},
+    {{"index": 2, "title": "生成的标题", "confidence": 0.0-1.0}}
+  ]
+}}"""
+
+            try:
+                response = self._call_llm(prompt, temperature=0.3, max_tokens=2000)
+                result = json.loads(response)
+
+                # 解析结果
+                titles = result.get('titles', [])
+
+                # 创建索引到结果的映射
+                title_map = {item['index']: item for item in titles}
+
+                # 按原始顺序返回结果
+                for i, ch_info in enumerate(batch, start=batch_start + 1):
+                    if i in title_map:
+                        all_results.append(title_map[i])
+                    else:
+                        # 如果 LLM 未返回该章节的标题，使用默认值
+                        all_results.append({
+                            'index': i,
+                            'title': "",
+                            'confidence': 0.0
+                        })
+
+                logger.info(f"✓ 批量生成完成: {len(titles)}/{len(batch)} 个标题")
+
+            except json.JSONDecodeError as e:
+                logger.error(f"JSON解析失败（批量标题生成）: {e}")
+                # 返回空结果
+                for i in range(len(batch)):
+                    all_results.append({
+                        'index': batch_start + i + 1,
+                        'title': "",
+                        'confidence': 0.0,
+                        'error': str(e)
+                    })
+            except Exception as e:
+                logger.error(f"批量生成标题失败: {e}")
+                for i in range(len(batch)):
+                    all_results.append({
+                        'index': batch_start + i + 1,
+                        'title': "",
+                        'confidence': 0.0,
+                        'error': str(e)
+                    })
+
+        logger.info(f"批量标题生成完成: 共 {len(all_results)} 个章节")
+        return all_results
+
+
     def _build_chapter_analysis_prompt(
         self,
         candidates: List[ChapterCandidate],
@@ -931,13 +1048,14 @@ class RuleBasedParserWithConfidence:
         from .parser_config import ParserConfig, DEFAULT_CONFIG
         self.config = config or DEFAULT_CONFIG
 
-    def parse_with_confidence(self, content: str, skip_toc_removal: bool = False, context=None) -> Dict:
+    def parse_with_confidence(self, content: str, skip_toc_removal: bool = False, context=None, resume_state=None) -> Dict:
         """
         解析内容并返回置信度
 
         :param content: 文本内容
         :param skip_toc_removal: If True, skip TOC removal (useful when content already processed)
         :param context: Context for progress reporting
+        :param resume_state: Resume state for checkpoint resume
         :return: {
             'volumes': [...],
             'chapters': [...],
@@ -947,8 +1065,8 @@ class RuleBasedParserWithConfidence:
         """
         from .parser import parse_hierarchical_content, detect_language
 
-        # 使用现有解析器
-        volumes = parse_hierarchical_content(content, skip_toc_removal=skip_toc_removal, context=context)
+        # 使用现有解析器，传递 resume_state 参数
+        volumes = parse_hierarchical_content(content, self.config, llm_assistant=None, skip_toc_removal=skip_toc_removal, context=context, resume_state=resume_state)
 
         # 检测语言
         language = detect_language(content)
@@ -1067,7 +1185,7 @@ class HybridParser:
         :param resume_state: Resume state for checkpoint resume
         :return: 卷列表
         """
-        from .parser import detect_language, parse_hierarchical_content
+        from .parser import detect_language
 
         # 阶段0: 使用LLM识别并移除目录页
         if self.llm_assistant:
@@ -1076,11 +1194,9 @@ class HybridParser:
         # 阶段1: 规则解析 + 置信度评分（使用LLM助手辅助目录识别）
         logger.info("阶段1: 规则解析...")
 
-        # 调用规则解析，传递skip_toc_removal参数、context和resume_state
-        volumes = parse_hierarchical_content(content, self.config, self.llm_assistant, skip_toc_removal=skip_toc_removal, context=context, resume_state=resume_state)
-
-        # 计算整体置信度
+        # 【修复】只调用一次规则解析，直接使用 parse_with_confidence 的结果
         rule_result = self.rule_parser.parse_with_confidence(content, skip_toc_removal=skip_toc_removal, context=context)
+        volumes = rule_result['volumes']
         confidence = rule_result['overall_confidence']
         threshold = self.config.llm_confidence_threshold
         logger.debug(f"规则解析置信度: {confidence:.2f}, 阈值: {threshold:.2f}")
@@ -1118,7 +1234,7 @@ class HybridParser:
             # 阶段3: 融合结果
             logger.info("阶段3: 融合结果...")
             final_volumes = self._merge_results(
-                rule_result['volumes'],
+                volumes,
                 llm_decisions,
                 candidates
             )
@@ -1130,7 +1246,7 @@ class HybridParser:
             return final_volumes
 
         # 无需LLM或未提供客户端
-        return rule_result['volumes']
+        return volumes
 
     def _convert_to_candidates(
         self,

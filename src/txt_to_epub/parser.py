@@ -828,6 +828,10 @@ def parse_chapters_from_content(content: str, language: str = 'chinese', config:
             print(f"断点续传：已处理 {resume_state.get_processed_count()} 章，继续处理...")
         print(f"{'='*60}")
 
+    # 【优化】批量收集需要 LLM 增强的章节
+    chapters_to_enhance = []
+    chapter_data = []  # 存储章节的元数据
+
     for i, match in enumerate(chapter_matches):
         chapter_title = match.group(1).strip()
 
@@ -843,50 +847,126 @@ def parse_chapters_from_content(content: str, language: str = 'chinese', config:
         chapter_content = content[chapter_start:chapter_end].strip('\n\r')
 
         if chapter_title and chapter_title not in seen_titles:  # Ensure title is not empty and not duplicate
-            # 计算并上报进度：5% 到 95% 之间（生成目录阶段占 90%）
-            progress_percent = int((i + 1) / total_chapters * 100)
-            if context:
-                # 将章节处理进度映射到 5% - 95% 区间
-                mapped_progress = 5 + int((i + 1) / total_chapters * 90)
-                context.report_progress(mapped_progress)
+            # 存储章节数据
+            chapter_data.append({
+                'index': i,
+                'title': chapter_title,
+                'content': chapter_content,
+                'is_simple': is_simple_chapter_title(chapter_title, language)
+            })
+
+            # 收集需要增强的章节
+            if is_simple_chapter_title(chapter_title, language):
+                # 提取章节号
+                if language == 'chinese':
+                    chapter_num_match = re.search(r'(第[一二三四五六七八九十百千万\d]+章)', chapter_title)
+                    chapter_number = chapter_num_match.group(1) if chapter_num_match else chapter_title
+                else:
+                    chapter_num_match = re.search(r'(Chapter\s+[\dIVXivx]+)', chapter_title, re.IGNORECASE)
+                    chapter_number = chapter_num_match.group(1) if chapter_num_match else chapter_title
+
+                chapters_to_enhance.append({
+                    'index': i,
+                    'number': chapter_number,
+                    'content': chapter_content
+                })
+
+    # 【优化】批量调用 LLM 生成标题
+    enhanced_titles = {}
+    if llm_assistant and chapters_to_enhance:
+        try:
+            logger.info(f"批量生成 {len(chapters_to_enhance)} 个简单章节的标题...")
+            print(f"\n批量生成 {len(chapters_to_enhance)} 个章节标题...")
+
+            batch_results = llm_assistant.generate_chapter_titles_batch(
+                chapters_to_enhance,
+                language=language,
+                max_content_length=400
+            )
+
+            # 构建索引到标题的映射
+            for result in batch_results:
+                idx = result.get('index')
+                if idx is not None:
+                    idx = idx - 1  # 转换为0-based索引
+                    if result.get('title') and result.get('confidence', 0) > 0.5:
+                        enhanced_titles[idx] = result['title']
+                        logger.info(f"[{idx+1}] 生成标题: {result['title']} (置信度: {result['confidence']:.2f})")
+
+            print(f"✓ 批量生成完成: {len(enhanced_titles)}/{len(chapters_to_enhance)} 个标题成功")
+
+        except Exception as e:
+            logger.warning(f"批量生成标题失败，回退到规则提取: {e}")
+            print(f"⚠ 批量生成失败，使用规则提取: {e}")
+
+    # 处理所有章节，应用增强的标题
+    for ch_data in chapter_data:
+        i = ch_data['index']
+        chapter_title = ch_data['title']
+        chapter_content = ch_data['content']
+
+        # 计算并上报进度：5% 到 95% 之间（生成目录阶段占 90%）
+        progress_percent = int((i + 1) / total_chapters * 100)
+        if context:
+            # 将章节处理进度映射到 5% - 95% 区间
+            mapped_progress = 5 + int((i + 1) / total_chapters * 90)
+            context.report_progress(mapped_progress)
+
+        # 打印进度
+        print(f"[{i+1}/{total_chapters}] ({progress_percent}%) 处理章节: {chapter_title[:20]}...")
+
+        # 应用增强的标题（如果有）
+        if i in enhanced_titles:
+            # 提取章节号
+            if language == 'chinese':
+                chapter_num_match = re.search(r'(第[一二三四五六七八九十百千万\d]+章)', chapter_title)
+                chapter_number = chapter_num_match.group(1) if chapter_num_match else chapter_title
+                enhanced_title = f"{chapter_number} {enhanced_titles[i]}"
             else:
-                print(f"DEBUG: context 为 None，无法上报进度！当前章节={i+1}/{total_chapters}")
-                logger.warning(f"DEBUG: context 为 None，无法上报进度！当前章节={i+1}/{total_chapters}")
+                chapter_num_match = re.search(r'(Chapter\s+[\dIVXivx]+)', chapter_title, re.IGNORECASE)
+                chapter_number = chapter_num_match.group(1) if chapter_num_match else chapter_title
+                enhanced_title = f"{chapter_number}: {enhanced_titles[i]}"
 
-            # 打印进度
-            if llm_assistant:
-                print(f"[{i+1}/{total_chapters}] ({progress_percent}%) 处理章节: {chapter_title[:20]}...")
-
-            # 增强章节标题：如果标题过于简单，尝试使用 LLM 或从内容中提取有意义的标题
-            enhanced_title = enhance_chapter_title(chapter_title, chapter_content, language, llm_assistant)
-
-            # 如果标题被增强了，记录日志
-            if enhanced_title != chapter_title:
-                logger.info(f"[{i+1}/{total_chapters}] Enhanced: '{chapter_title}' -> '{enhanced_title}'")
-                if llm_assistant:
-                    print(f"  ✓ 生成标题: {enhanced_title}")
-            else:
-                if llm_assistant:
-                    print(f"  - 保留原标题")
-
+            logger.info(f"[{i+1}/{total_chapters}] Enhanced: '{chapter_title}' -> '{enhanced_title}'")
+            print(f"  ✓ 应用标题: {enhanced_title}")
             final_title = enhanced_title
-            seen_titles.add(final_title)
-
-            # Further analyze chapter content for sections
-            sections = parse_sections_from_content(chapter_content, language)
-            if sections:
-                # If has sections, chapter content is empty (all content is in sections)
-                chapter_list.append(Chapter(title=final_title, content="", sections=sections))
+        elif ch_data['is_simple'] and not llm_assistant:
+            # 如果没有 LLM，回退到规则提取
+            meaningful_title = extract_meaningful_title(chapter_content, language)
+            if meaningful_title:
+                if language == 'chinese':
+                    chapter_num_match = re.search(r'(第[一二三四五六七八九十百千万\d]+章)', chapter_title)
+                    chapter_number = chapter_num_match.group(1) if chapter_num_match else chapter_title
+                    final_title = f"{chapter_number} {meaningful_title}"
+                else:
+                    chapter_num_match = re.search(r'(Chapter\s+[\dIVXivx]+)', chapter_title, re.IGNORECASE)
+                    chapter_number = chapter_num_match.group(1) if chapter_num_match else chapter_title
+                    final_title = f"{chapter_number}: {meaningful_title}"
+                print(f"  - 规则提取标题: {meaningful_title}")
             else:
-                # If no sections, chapter directly contains content
-                if not chapter_content.strip():
-                    empty_content = "此章节内容为空。" if language == 'chinese' else "This chapter is empty."
-                    chapter_content = empty_content
-                chapter_list.append(Chapter(title=final_title, content=chapter_content, sections=[]))
+                final_title = chapter_title
+                print(f"  - 保留原标题")
+        else:
+            final_title = chapter_title
+            print(f"  - 保留原标题")
 
-            # 断点续传：标记章节已处理
-            if resume_state:
-                resume_state.mark_chapter_processed(chapter_title)
+        seen_titles.add(final_title)
+
+        # Further analyze chapter content for sections
+        sections = parse_sections_from_content(chapter_content, language)
+        if sections:
+            # If has sections, chapter content is empty (all content is in sections)
+            chapter_list.append(Chapter(title=final_title, content="", sections=sections))
+        else:
+            # If no sections, chapter directly contains content
+            if not chapter_content.strip():
+                empty_content = "此章节内容为空。" if language == 'chinese' else "This chapter is empty."
+                chapter_content = empty_content
+            chapter_list.append(Chapter(title=final_title, content=chapter_content, sections=[]))
+
+        # 断点续传：标记章节已处理
+        if resume_state:
+            resume_state.mark_chapter_processed(chapter_title)
 
     # 完成日志
     if llm_assistant:
