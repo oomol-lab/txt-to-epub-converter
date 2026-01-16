@@ -3,9 +3,13 @@ import logging
 from typing import List, Optional
 from .data_structures import Section, Chapter, Volume
 from .parser_config import ParserConfig, DEFAULT_CONFIG
+from .output_helper import UserOutput
 
 # Configure logging
 logger = logging.getLogger(__name__)
+
+# Create user output helper
+user_output = UserOutput(verbose=True)
 
 
 class ChinesePatterns:
@@ -407,30 +411,28 @@ def remove_table_of_contents(content: str, language: str = None, llm_assistant=N
     if config is None:
         config = DEFAULT_CONFIG
 
-    print("\n" + "="*60)
-    print("【目录检测】开始检测文档中是否存在目录页...")
-    print("="*60)
+    user_output.section_header("【目录检测】开始检测文档中是否存在目录页...")
 
     if not content or not content.strip():
-        print("【目录检测】文档内容为空，跳过")
+        user_output.info("文档内容为空，跳过")
         return content
 
     # Auto-detect language
     if language is None:
         language = detect_language(content)
 
-    print(f"【目录检测】检测到文档语言: {language}")
+    user_output.detail(f"检测到文档语言: {language}")
 
     # Try LLM-based TOC detection first if available
     if llm_assistant:
         try:
-            print("【目录检测】尝试使用LLM智能识别目录...")
+            user_output.info("尝试使用LLM智能识别目录...")
             logger.info("尝试使用LLM识别目录...")
             toc_result = llm_assistant.identify_table_of_contents(content[:5000], language)
 
             if toc_result.get('has_toc') and toc_result.get('confidence', 0) > config.llm_toc_detection_threshold:
-                print(f"【目录检测】✓ LLM确认存在目录 (置信度: {toc_result['confidence']:.2f})")
-                print(f"【目录检测】原因: {toc_result.get('reason', 'N/A')}")
+                user_output.success(f"LLM确认存在目录 (置信度: {toc_result['confidence']:.2f})")
+                user_output.detail(f"原因: {toc_result.get('reason', 'N/A')}")
                 logger.info(f"LLM确认存在目录 (置信度: {toc_result['confidence']:.2f})")
                 logger.info(f"原因: {toc_result.get('reason', 'N/A')}")
 
@@ -438,19 +440,19 @@ def remove_table_of_contents(content: str, language: str = None, llm_assistant=N
                 # This provides a good balance between accuracy and robustness
                 pass  # Continue to rule-based detection below
             else:
-                print(f"【目录检测】✗ LLM判定: {'无目录' if not toc_result.get('has_toc') else '目录置信度低'} (置信度: {toc_result.get('confidence', 0):.2f})")
+                user_output.detail(f"LLM判定: {'无目录' if not toc_result.get('has_toc') else '目录置信度低'} (置信度: {toc_result.get('confidence', 0):.2f})")
                 logger.info(f"LLM未检测到目录或置信度较低 (has_toc={toc_result.get('has_toc')}, confidence={toc_result.get('confidence', 0):.2f})")
                 # If LLM says no TOC with high confidence, skip TOC removal
                 if not toc_result.get('has_toc') and toc_result.get('confidence', 0) > config.llm_no_toc_threshold:
-                    print("【目录检测】LLM高置信度判定无目录，跳过目录移除")
-                    print("="*60 + "\n")
+                    user_output.info("LLM高置信度判定无目录，跳过目录移除")
+                    user_output.section_footer()
                     logger.info("LLM高置信度判定无目录，跳过目录移除")
                     return content
         except Exception as e:
-            print(f"【目录检测】⚠ LLM识别失败，回退到规则方法: {e}")
+            user_output.warning(f"LLM识别失败，回退到规则方法: {e}")
             logger.warning(f"LLM目录识别失败，回退到规则方法: {e}")
     else:
-        print("【目录检测】使用规则方法检测目录...")
+        user_output.info("使用规则方法检测目录...")
 
     # Select corresponding patterns
     if language == 'english':
@@ -638,16 +640,16 @@ def remove_table_of_contents(content: str, language: str = None, llm_assistant=N
     # Remove TOC if found
     if toc_start != -1 and toc_end != -1 and toc_end > toc_start:
         removed_lines = toc_end - toc_start + 1
-        print(f"\n【目录移除】✓ 成功移除目录区域!")
-        print(f"【目录移除】位置: 第 {toc_start+1} 行 到 第 {toc_end+1} 行")
-        print(f"【目录移除】删除: 共 {removed_lines} 行")
-        print("="*60 + "\n")
+        user_output.success("成功移除目录区域!")
+        user_output.detail(f"位置: 第 {toc_start+1} 行 到 第 {toc_end+1} 行")
+        user_output.detail(f"删除: 共 {removed_lines} 行")
+        user_output.section_footer()
         logger.info(f"移除目录: 第 {toc_start+1} 行到第 {toc_end+1} 行，共 {removed_lines} 行")
         remaining_lines = lines[:toc_start] + lines[toc_end + 1:]
         return '\n'.join(remaining_lines)
     else:
-        print("【目录检测】✗ 未检测到目录区域")
-        print("="*60 + "\n")
+        user_output.info("未检测到目录区域")
+        user_output.section_footer()
 
     return content
 
@@ -835,8 +837,8 @@ def parse_chapters_from_content(content: str, language: str = 'chinese', config:
     for i, match in enumerate(chapter_matches):
         chapter_title = match.group(1).strip()
 
-        # 断点续传：跳过已处理的章节
-        if resume_state and resume_state.is_chapter_processed(chapter_title):
+        # 断点续传：跳过已处理的章节（使用索引）
+        if resume_state and resume_state.is_chapter_processed(i):
             if llm_assistant:
                 print(f"[{i+1}/{total_chapters}] 跳过已处理章节: {chapter_title[:20]}...")
             continue
@@ -964,9 +966,9 @@ def parse_chapters_from_content(content: str, language: str = 'chinese', config:
                 chapter_content = empty_content
             chapter_list.append(Chapter(title=final_title, content=chapter_content, sections=[]))
 
-        # 断点续传：标记章节已处理
+        # 断点续传：标记章节已处理（使用索引）
         if resume_state:
-            resume_state.mark_chapter_processed(chapter_title)
+            resume_state.mark_chapter_processed(i)
 
     # 完成日志
     if llm_assistant:

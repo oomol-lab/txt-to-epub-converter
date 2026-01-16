@@ -295,6 +295,10 @@ def txt_to_epub(txt_file: str, epub_file: str, title: str = 'My Book',
 
             # Step 4: Add volumes, chapters and sections to book
             pbar.set_description("生成EPUB文件")
+
+            # Prepare watermark text from config
+            watermark = config.watermark_text if config.enable_watermark else None
+
             chapter_items = []
             toc_structure = []
             chapter_counter = 1
@@ -312,7 +316,7 @@ def txt_to_epub(txt_file: str, epub_file: str, title: str = 'My Book',
                     if volume.title:  # If has volume title
                         # Create a page for the volume
                         volume_file_name = f"volume_{volume_counter}.xhtml"
-                        volume_page = create_volume_page(volume.title, volume_file_name, len(volume.chapters))
+                        volume_page = create_volume_page(volume.title, volume_file_name, len(volume.chapters), watermark)
                         book.add_item(volume_page)
                         chapter_items.append(volume_page)
 
@@ -325,7 +329,7 @@ def txt_to_epub(txt_file: str, epub_file: str, title: str = 'My Book',
                             if chapter.sections:  # Chapter has sections
                                 # Create chapter page
                                 chapter_file_name = f"chap_{chapter_counter}.xhtml"
-                                chapter_page = create_chapter_page(chapter.title, chapter.content, chapter_file_name, len(chapter.sections))
+                                chapter_page = create_chapter_page(chapter.title, chapter.content, chapter_file_name, len(chapter.sections), watermark)
                                 book.add_item(chapter_page)
                                 chapter_items.append(chapter_page)
 
@@ -371,7 +375,7 @@ def txt_to_epub(txt_file: str, epub_file: str, title: str = 'My Book',
                             if chapter.sections:  # Chapter has sections
                                 # Create chapter page
                                 chapter_file_name = f"chap_{chapter_counter}.xhtml"
-                                chapter_page = create_chapter_page(chapter.title, chapter.content, chapter_file_name, len(chapter.sections))
+                                chapter_page = create_chapter_page(chapter.title, chapter.content, chapter_file_name, len(chapter.sections), watermark)
                                 book.add_item(chapter_page)
                                 chapter_items.append(chapter_page)
 
@@ -448,6 +452,7 @@ def txt_to_epub(txt_file: str, epub_file: str, title: str = 'My Book',
 
         # 标记断点续传完成并清理状态文件
         if resume_state:
+            resume_state.flush()  # 确保所有未保存的更改被保存
             resume_state.mark_completed()
             resume_state.cleanup()
             logger.info("断点续传：转换完成，已清理状态文件")

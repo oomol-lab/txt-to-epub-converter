@@ -20,16 +20,72 @@ except ImportError:
 
 @dataclass
 class ParserConfig:
-    """Configuration class for text parser"""
+    """
+    配置类，用于自定义文本解析行为
 
-    # Minimum content length thresholds
-    min_chapter_length: int = 100  # Minimum chapter length in characters
-    min_section_length: int = 50  # Minimum section length in characters
+    该类包含所有可配置的解析参数，用于控制章节识别、内容验证、
+    LLM 辅助、目录检测等功能的行为。
+    """
 
-    # Validation settings
-    enable_chapter_validation: bool = True  # Enable chapter title validation
-    enable_length_validation: bool = False  # Enable length-based validation
-    enable_fuzzy_matching: bool = False  # Enable fuzzy pattern matching (future)
+    # ========== 内容长度阈值配置 ==========
+
+    min_chapter_length: int = 100
+    """
+    最小章节长度（字符数）
+
+    默认值: 100
+
+    说明: 用于验证章节是否过短。低于此长度的章节可能被视为误识别。
+    仅在 enable_length_validation=True 时生效。
+
+    调整建议:
+    - 短章节书籍（如诗集）: 50-80
+    - 正常小说: 100-200
+    - 长章节书籍: 500+
+    """
+
+    min_section_length: int = 50
+    """
+    最小节长度（字符数）
+
+    默认值: 50
+
+    说明: 用于验证节（Section）是否过短。
+    """
+
+    # ========== 验证设置 ==========
+
+    enable_chapter_validation: bool = True
+    """
+    是否启用章节标题验证
+
+    默认值: True
+
+    说明: 启用后，会过滤掉正文中对章节的引用（如"在第三章中"）。
+    这可以显著提高章节识别准确性，但可能略微增加处理时间。
+
+    推荐: 保持 True，除非遇到特殊格式导致误判。
+    """
+
+    enable_length_validation: bool = False
+    """
+    是否启用基于长度的章节验证
+
+    默认值: False
+
+    说明: 启用后，会合并过短的章节。适用于章节识别不准确的情况。
+
+    注意: 可能会误合并真实的短章节。建议先尝试调整章节模式。
+    """
+
+    enable_fuzzy_matching: bool = False
+    """
+    是否启用模糊匹配（未来功能）
+
+    默认值: False
+
+    说明: 预留参数，当前未实现。
+    """
 
     # Custom patterns (regex strings)
     custom_chapter_patterns: List[str] = field(default_factory=list)
@@ -64,21 +120,100 @@ class ParserConfig:
     """使用的LLM模型"""
 
     llm_confidence_threshold: float = 0.7
-    """LLM置信度阈值,低于此值时使用规则解析结果 (默认0.7)"""
+    """
+    LLM 置信度阈值
+
+    范围: 0.0-1.0
+    默认值: 0.7
+
+    说明: 规则解析的整体置信度低于此值时，才会使用 LLM 辅助。
+    - 较低的值（如 0.5）: 更频繁使用 LLM，成本更高但准确性更好
+    - 较高的值（如 0.9）: 优先使用规则解析，降低成本
+
+    推荐: 0.6-0.8 之间
+    """
 
     llm_toc_detection_threshold: float = 0.7
-    """LLM判断存在目录的置信度阈值 (默认0.7)，LLM必须超过此值才确认存在目录"""
+    """
+    LLM 判断存在目录的置信度阈值
+
+    范围: 0.0-1.0
+    默认值: 0.7
+
+    说明: LLM 判断存在目录的置信度必须超过此值，才确认存在目录。
+
+    调整建议:
+    - 如果误判无目录为有目录：提高到 0.8-0.9
+    - 如果漏检目录：降低到 0.5-0.6
+    """
 
     llm_no_toc_threshold: float = 0.8
-    """LLM判断无目录的置信度阈值 (默认0.8)，超过此值时直接跳过目录移除"""
+    """
+    LLM 判断无目录的置信度阈值
+
+    范围: 0.0-1.0
+    默认值: 0.8
+
+    说明: LLM 判断无目录的置信度超过此值时，直接跳过目录移除。
+    这可以避免不必要的规则检测，提高效率。
+    """
 
     # ========== 目录检测配置 ==========
 
     toc_detection_score_threshold: float = 30.0
-    """目录检测的综合评分阈值 (0-100, 默认30)，分数越高要求越严格"""
+    """
+    目录检测的综合评分阈值
+
+    范围: 0-100
+    默认值: 30.0
+
+    说明: 规则方法检测目录时，综合评分超过此阈值才判定为目录页。
+    评分基于以下 6 个因子：
+    1. 章节密度（章节数/1000字符）
+    2. 绝对章节数（至少5个）
+    3. 连续章节模式（3个以上连续）
+    4. 短行占比（60%以上）
+    5. 页码标记存在性
+    6. 位置靠前加分
+
+    调整建议:
+    - 如果漏检目录：降低到 20-25
+    - 如果误判正文为目录：提高到 40-50
+    - 如果频繁误判：考虑启用 LLM 辅助（更准确）
+    """
 
     toc_max_scan_lines: int = 300
-    """目录检测的最大扫描行数 (默认300)，防止误判过长区域为目录"""
+    """
+    目录检测的最大扫描行数
+
+    默认值: 300
+
+    说明: 防止误判过长区域为目录。目录通常在前 100-300 行内。
+
+    调整建议:
+    - 目录很长的书籍：提高到 500-800
+    - 避免误判：降低到 150-200
+    """
+
+    # ========== HTML 输出配置 ==========
+
+    enable_watermark: bool = True
+    """
+    是否在生成的 EPUB 页面中显示水印
+
+    默认值: True
+
+    说明: 水印会显示在卷页和章节页的底部。
+    """
+
+    watermark_text: str = "Powered by oomol.com, Please ensure that the copyright is in compliance"
+    """
+    水印文本内容
+
+    默认值: "Powered by oomol.com, Please ensure that the copyright is in compliance"
+
+    说明: 自定义水印文字。设置为空字符串可隐藏水印（需 enable_watermark=True）。
+    """
 
     @classmethod
     def from_yaml(cls, yaml_path: str) -> 'ParserConfig':
@@ -160,7 +295,10 @@ class ParserConfig:
             llm_no_toc_threshold=config_dict.get('llm_no_toc_threshold', 0.8),
             # 目录检测配置
             toc_detection_score_threshold=config_dict.get('toc_detection_score_threshold', 30.0),
-            toc_max_scan_lines=config_dict.get('toc_max_scan_lines', 300)
+            toc_max_scan_lines=config_dict.get('toc_max_scan_lines', 300),
+            # HTML 输出配置
+            enable_watermark=config_dict.get('enable_watermark', True),
+            watermark_text=config_dict.get('watermark_text', 'Powered by oomol.com, Please ensure that the copyright is in compliance')
         )
 
     def to_dict(self) -> Dict[str, Any]:
@@ -193,7 +331,10 @@ class ParserConfig:
             'llm_no_toc_threshold': self.llm_no_toc_threshold,
             # 目录检测配置
             'toc_detection_score_threshold': self.toc_detection_score_threshold,
-            'toc_max_scan_lines': self.toc_max_scan_lines
+            'toc_max_scan_lines': self.toc_max_scan_lines,
+            # HTML 输出配置
+            'enable_watermark': self.enable_watermark,
+            'watermark_text': self.watermark_text
         }
 
     def save_to_yaml(self, yaml_path: str) -> None:

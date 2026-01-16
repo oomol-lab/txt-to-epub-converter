@@ -1,17 +1,38 @@
 from ebooklib import epub
+from typing import Optional
 
 
-def create_volume_page(volume_title: str, file_name: str, chapter_count: int) -> epub.EpubHtml:
+def _get_watermark_html(watermark_text: str) -> str:
+    """
+    Generate watermark HTML.
+
+    :param watermark_text: Watermark text content
+    :return: HTML string for watermark
+    """
+    if not watermark_text:
+        return ""
+
+    return f'''
+        <div style="position: fixed; bottom: 2rem; left: 50%; transform: translateX(-50%); width: 100%;">
+            <p style="color: #95a5a6; font-size: 0.8em; text-align: center;">
+                {watermark_text}
+            </p>
+        </div>'''
+
+
+def create_volume_page(volume_title: str, file_name: str, chapter_count: int,
+                      watermark_text: Optional[str] = None) -> epub.EpubHtml:
     """
     Create volume/part/book page with modern design.
-    
+
     :param volume_title: Volume title
     :param file_name: File name
     :param chapter_count: Chapter count
+    :param watermark_text: Watermark text (None to disable watermark)
     :return: EpubHtml object
     """
     volume_page = epub.EpubHtml(title=volume_title, file_name=file_name, lang='zh')
-    
+
     # Determine unit name and decorative icon
     if "卷" in volume_title:
         unit_name = "卷"
@@ -25,7 +46,10 @@ def create_volume_page(volume_title: str, file_name: str, chapter_count: int) ->
     else:
         unit_name = "卷"
         icon = "📖"
-    
+
+    # Generate watermark HTML
+    watermark_html = _get_watermark_html(watermark_text) if watermark_text else ""
+
     # Create concise volume page content
     volume_page.content = f'''
     <!DOCTYPE html>
@@ -61,12 +85,7 @@ def create_volume_page(volume_title: str, file_name: str, chapter_count: int) ->
                 <p style="color: #2c3e50; font-size: 1.3em; font-weight: 500; margin-bottom: 2rem;">
                 </p>
             </div>
-        </div>
-        <div style="position: fixed; bottom: 2rem; left: 50%; transform: translateX(-50%); width: 100%;">
-            <p style="color: #95a5a6; font-size: 0.8em; text-align: center;">
-                Powered by oomol.com, Please ensure that the copyright is in compliance
-            </p>
-        </div>
+        </div>{watermark_html}
     </body>
     </html>
     '''
@@ -75,18 +94,23 @@ def create_volume_page(volume_title: str, file_name: str, chapter_count: int) ->
 
 
 
-def create_chapter_page(chapter_title: str, chapter_content: str, file_name: str, section_count: int) -> epub.EpubHtml:
+def create_chapter_page(chapter_title: str, chapter_content: str, file_name: str, section_count: int,
+                       watermark_text: Optional[str] = None) -> epub.EpubHtml:
     """
     Create chapter page (for chapters with sections) with modern design.
-    
+
     :param chapter_title: Chapter title
     :param chapter_content: Chapter content (usually empty, as content is in sections)
     :param file_name: File name
     :param section_count: Section count
+    :param watermark_text: Watermark text (None to disable watermark)
     :return: EpubHtml object
     """
     chapter_page = epub.EpubHtml(title=chapter_title, file_name=file_name, lang='zh')
-    
+
+    # Generate watermark HTML
+    watermark_html = _get_watermark_html(watermark_text) if watermark_text else ""
+
     # Create elegant chapter page content
     if chapter_content.strip():
         chapter_page.content = f'''
@@ -126,12 +150,7 @@ def create_chapter_page(chapter_title: str, chapter_content: str, file_name: str
                     <p style="color: #2c3e50; font-size: 1.3em; font-weight: 500;">
                     </p>
                 </div>
-            </div>
-            <div style="position: fixed; bottom: 2rem; left: 50%; transform: translateX(-50%); width: 100%;">
-                <p style="color: #95a5a6; font-size: 0.8em; text-align: center;">
-                       Powered by oomol.com, Please ensure that the copyright is in compliance
-                </p>
-            </div>
+            </div>{watermark_html}
         </body>
         </html>
         '''
@@ -170,12 +189,7 @@ def create_chapter_page(chapter_title: str, chapter_content: str, file_name: str
                     <p style="color: #2c3e50; font-size: 1.3em; font-weight: 500;">
                     </p>
                 </div>
-            </div>
-            <div style="position: fixed; bottom: 2rem; left: 50%; transform: translateX(-50%); width: 100%;">
-                <p style="color: #95a5a6; font-size: 0.8em; text-align: center;">
-                        Powered by oomol.com, Please ensure that the copyright is in compliance
-                </p>
-            </div>
+            </div>{watermark_html}
         </body>
         </html>
         '''
