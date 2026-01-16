@@ -1,0 +1,84 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "txt-to-epub-converter"
+version = "0.1.0"
+description = "A powerful Python library for converting plain text files to professional EPUB eBooks with intelligent chapter detection"
+readme = "README.md"
+authors = [
+    {name = "TXT to EPUB Converter Team", email = "your.email@example.com"}
+]
+license = {text = "MIT"}
+keywords = ["epub", "ebook", "txt", "converter", "text-to-epub", "book", "publishing"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Text Processing :: Markup",
+    "Topic :: Utilities",
+]
+requires-python = ">=3.10"
+dependencies = [
+    "EbookLib>=0.18,<1.0",
+    "chardet>=5.2.0,<6.0",
+    "requests>=2.32.0,<3.0",
+    "openai>=1.0.0,<2.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-cov>=4.0",
+    "black>=23.0",
+    "flake8>=6.0",
+    "mypy>=1.0",
+    "build>=0.10",
+    "twine>=4.0",
+]
+docs = [
+    "sphinx>=7.0",
+    "sphinx-rtd-theme>=1.3",
+]
+
+[project.urls]
+Homepage = "https://github.com/yourusername/txt-to-epub-converter"
+Documentation = "https://github.com/yourusername/txt-to-epub-converter#readme"
+Repository = "https://github.com/yourusername/txt-to-epub-converter.git"
+"Bug Tracker" = "https://github.com/yourusername/txt-to-epub-converter/issues"
+Changelog = "https://github.com/yourusername/txt-to-epub-converter/blob/main/CHANGELOG.md"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["txt_to_epub*"]
+exclude = ["tests*"]
+
+[tool.black]
+line-length = 120
+target-version = ['py310', 'py311', 'py312']
+include = '\.pyi?$'
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = "test_*.py"
+python_classes = "Test*"
+python_functions = "test_*"
+addopts = "-v --cov=txt_to_epub --cov-report=html --cov-report=term"
+
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false
+ignore_missing_imports = true

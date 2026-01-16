@@ -1,0 +1,5 @@
+# Core dependencies
+EbookLib>=0.18,<1.0
+chardet>=5.2.0,<6.0
+requests>=2.32.0,<3.0
+openai>=1.0.0,<2.0
