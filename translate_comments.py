@@ -12,7 +12,7 @@ from pathlib import Path
 TRANSLATIONS = {
     # parser.py
     "# 移除常见的开头词汇": "# Remove common opening phrases",
-    "# 移除"话说"、"且说"、"却说"等开头": "# Remove opening phrases like \"话说\", \"且说\", \"却说\"",
+    '# 移除"话说"、"且说"、"却说"等开头': "# Remove opening phrases like \"话说\", \"且说\", \"却说\"",
     "# 寻找第一个完整的句子": "# Find first complete sentence",
     "# 检查是否包含有意义的内容": "# Check if contains meaningful content",
     "# 截取前max_length个字符": "# Extract first max_length characters",
@@ -32,8 +32,8 @@ TRANSLATIONS = {
     "# 回退方案：从内容中提取有意义的标题": "# Fallback: extract meaningful title from content",
     "# 保留原始章节号，添加实质内容": "# Keep original chapter number, add substantial content",
     "# 如果无法提取有意义的内容，返回原始标题": "# If unable to extract meaningful content, return original title",
-    "# 匹配只有"第X章"或"第X章 "的标题": "# Match titles with only \"第X章\" or \"第X章 \"",
-    "# 如果标题长度小于等于5个字符，且包含"第"和"章"，认为是简单标题": "# If title length is <= 5 characters and contains \"第\" and \"章\", consider it simple",
+    '# 匹配只有"第X章"或"第X章 "的标题': "# Match titles with only \"第X章\" or \"第X章 \"",
+    '# 如果标题长度小于等于5个字符,且包含"第"和"章",认为是简单标题': "# If title length is <= 5 characters and contains \"第\" and \"章\", consider it simple",
     "# 英文简单标题模式": "# English simple title patterns",
     "# 设置断点续传的总章节数": "# Set total chapter count for resume feature",
     "# 记录开始处理章节": "# Log start of chapter processing",
