@@ -81,7 +81,7 @@ def _read_txt_file(txt_file: str) -> str:
         if file_size == 0:
             logger.warning(f"File is empty: {txt_file}")
             return "This document is empty."
-        
+
         # Detect file encoding
         with open(txt_file, 'rb') as f:
             # Read sufficient data for encoding detection, but not exceeding 1MB
@@ -90,8 +90,6 @@ def _read_txt_file(txt_file: str) -> str:
             result = chardet.detect(raw_data)
             encoding = result.get('encoding') or 'gb18030'
             confidence = result.get('confidence', 0)
-            
-            logger.info(f"Detected file encoding: {encoding} (confidence: {confidence:.2f})")
 
         # Use GB18030 encoding to handle Chinese encoding issues
         if encoding and encoding.lower() in ['gb2312', 'gbk']:
@@ -108,7 +106,6 @@ def _read_txt_file(txt_file: str) -> str:
                     content = f.read()
                     # Verify content is reasonable (not all replacement characters)
                     if content and content.count('�') / len(content) < 0.1:  # Less than 10% replacement characters
-                        logger.info(f"Successfully read file using encoding {enc}")
                         return content
             except (UnicodeDecodeError, UnicodeError):
                 continue
@@ -130,7 +127,6 @@ def _write_epub_file(epub_file: str, book: epub.EpubBook) -> None:
     """Write EPUB file."""
     try:
         epub.write_epub(epub_file, book, {})
-        logger.info(f"Successfully generated EPUB file: {epub_file}")
     except Exception as e:
         raise Exception(f"Unable to write EPUB file {epub_file}: {e}")
 
@@ -168,8 +164,6 @@ def txt_to_epub(txt_file: str, epub_file: str, title: str = 'My Book',
     if not epub_file.lower().endswith('.epub'):
         raise ValueError("Output file must be .epub format")
 
-    logger.info(f"Starting conversion: {txt_file} -> {epub_file}")
-
     # Initialize checkpoint resume state
     resume_state = None
     if enable_resume:
@@ -180,10 +174,8 @@ def txt_to_epub(txt_file: str, epub_file: str, title: str = 'My Book',
 
         # Verify if source file has changed
         if resume_state.verify_source_file(txt_file):
-            logger.info(f"Resume: Continuing from last interruption (processed {resume_state.get_processed_count()} chapters)")
             print(f">>> Resume enabled: {resume_state.get_processed_count()} chapters already processed")
         else:
-            logger.info("Resume: Source file changed or first run, starting fresh")
             print(">>> Resume: Source file changed or first run, starting fresh")
             resume_state.reset()
             resume_state.set_source_hash(txt_file)
@@ -216,7 +208,6 @@ def txt_to_epub(txt_file: str, epub_file: str, title: str = 'My Book',
                 logger.warning("File content is empty, creating default content")
                 content = "This document content is empty or cannot be parsed."
 
-            logger.info(f"File content length: {len(content)} characters")
             pbar.update(1)
 
             if context:
@@ -224,8 +215,6 @@ def txt_to_epub(txt_file: str, epub_file: str, title: str = 'My Book',
 
             # Step 3: Parse hierarchical content
             pbar.set_description("Parsing document structure")
-
-            logger.debug(f"Parser config: enable_llm={config.enable_llm_assistance}, LLM_AVAILABLE={LLM_AVAILABLE}")
 
             # Preprocessing: Remove table of contents once before all parsing
             from .parser import remove_table_of_contents, detect_language
@@ -249,7 +238,6 @@ def txt_to_epub(txt_file: str, epub_file: str, title: str = 'My Book',
 
             # Use hybrid parser (if LLM is enabled and available)
             if config.enable_llm_assistance and LLM_AVAILABLE:
-                logger.info("Using hybrid parser (rules + LLM)")
                 try:
                     parser = HybridParser(
                         llm_api_key=config.llm_api_key,
@@ -259,14 +247,6 @@ def txt_to_epub(txt_file: str, epub_file: str, title: str = 'My Book',
                     )
                     # Skip TOC removal since we already did it
                     volumes = parser.parse(content, skip_toc_removal=True, context=context, resume_state=resume_state)
-                    logger.info(f"Parsing completed, generated {len(volumes)} volumes")
-
-                    # Output LLM statistics
-                    llm_stats = parser.get_stats()
-                    if llm_stats['total_calls'] > 0:
-                        logger.info(f"LLM stats: {llm_stats['total_calls']} calls, "
-                                  f"${llm_stats['total_cost']:.4f} cost, "
-                                  f"{llm_stats['total_input_tokens']} + {llm_stats['total_output_tokens']} tokens")
                 except Exception as e:
                     logger.warning(f"Hybrid parser failed, falling back to rule-based parsing: {e}")
                     # Skip TOC removal since we already did it
@@ -276,8 +256,6 @@ def txt_to_epub(txt_file: str, epub_file: str, title: str = 'My Book',
                 # Use traditional rule-based parsing
                 if config.enable_llm_assistance and not LLM_AVAILABLE:
                     logger.warning("User enabled intelligent analysis, but LLM module is unavailable, falling back to rule-based parsing")
-                else:
-                    logger.info("Using traditional rule-based parsing")
                 # Skip TOC removal since we already did it
                 # If llm_assistant is available, also pass it to rule-based parser for title generation
                 volumes = parse_hierarchical_content(content, config, llm_assistant, skip_toc_removal=True, context=context, resume_state=resume_state)
@@ -287,7 +265,6 @@ def txt_to_epub(txt_file: str, epub_file: str, title: str = 'My Book',
                 logger.error("Parsing failed, no volumes generated")
                 raise Exception("Document parsing failed, unable to generate EPUB")
 
-            logger.info(f"Parsing completed, generated {len(volumes)} volumes")
             pbar.update(1)
 
             # Chapter parsing completed, report 95% progress
@@ -438,7 +415,6 @@ def txt_to_epub(txt_file: str, epub_file: str, title: str = 'My Book',
                 context.report_progress(100)
 
         # Verify conversion content integrity
-        logger.info("Starting conversion content integrity verification...")
         is_valid, validation_report = validate_conversion_integrity(content, volumes)
 
         # Output verification report
@@ -446,17 +422,12 @@ def txt_to_epub(txt_file: str, epub_file: str, title: str = 'My Book',
 
         if not is_valid:
             logger.warning("Content integrity verification failed, possible content loss")
-        else:
-            logger.info("Content integrity verification passed, good conversion quality")
-
-        logger.info(f"EPUB conversion completed: {epub_file}")
 
         # Mark checkpoint resume as completed and clean up state file
         if resume_state:
             resume_state.flush()  # Ensure all unsaved changes are persisted
             resume_state.mark_completed()
             resume_state.cleanup()
-            logger.info("Resume: Conversion completed, state file cleaned up")
 
         return {
             "success": True,

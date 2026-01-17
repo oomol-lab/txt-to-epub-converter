@@ -7,12 +7,8 @@ from typing import Optional
 from .patterns import ChinesePatterns, EnglishPatterns
 from .language_detector import detect_language
 from ..parser_config import ParserConfig, DEFAULT_CONFIG
-from ..output_helper import UserOutput
 
 logger = logging.getLogger(__name__)
-
-# Create user output helper
-user_output = UserOutput(verbose=True)
 
 
 def remove_table_of_contents(content: str, language: str = None, llm_assistant=None, config: Optional[ParserConfig] = None) -> str:
@@ -32,48 +28,33 @@ def remove_table_of_contents(content: str, language: str = None, llm_assistant=N
     if config is None:
         config = DEFAULT_CONFIG
 
-    user_output.section_header("【Table of Contents Detection】Starting to detect if document contains table of contents...")
-
     if not content or not content.strip():
-        user_output.info("Document content is empty, skipping")
         return content
 
     # Auto-detect language
     if language is None:
         language = detect_language(content)
 
-    user_output.detail(f"Detected document language: {language}")
-
     # Try LLM-based TOC detection first if available
     if llm_assistant:
         try:
-            user_output.info("Attempting to use LLM intelligent recognition of table of contents...")
             logger.info("Attempting to use LLM to recognize table of contents...")
             toc_result = llm_assistant.identify_table_of_contents(content[:5000], language)
 
             if toc_result.get('has_toc') and toc_result.get('confidence', 0) > config.llm_toc_detection_threshold:
-                user_output.success(f"LLM confirmed table of contents exists (confidence: {toc_result['confidence']:.2f})")
-                user_output.detail(f"Reason: {toc_result.get('reason', 'N/A')}")
                 logger.info(f"LLM confirmed table of contents exists (confidence: {toc_result['confidence']:.2f})")
-                logger.info(f"Reason: {toc_result.get('reason', 'N/A')}")
 
                 # Use rule-based method to find and remove TOC, but with LLM confirmation
                 # This provides a good balance between accuracy and robustness
                 pass  # Continue to rule-based detection below
             else:
-                user_output.detail(f"LLM judgment: {'No TOC' if not toc_result.get('has_toc') else 'TOC confidence low'} (confidence: {toc_result.get('confidence', 0):.2f})")
                 logger.info(f"LLM did not detect TOC or confidence low (has_toc={toc_result.get('has_toc')}, confidence={toc_result.get('confidence', 0):.2f})")
                 # If LLM says no TOC with high confidence, skip TOC removal
                 if not toc_result.get('has_toc') and toc_result.get('confidence', 0) > config.llm_no_toc_threshold:
-                    user_output.info("LLM high confidence judgment: no TOC, skipping TOC removal")
-                    user_output.section_footer()
                     logger.info("LLM high confidence judgment: no TOC, skipping TOC removal")
                     return content
         except Exception as e:
-            user_output.warning(f"LLM recognition failed, falling back to rule method: {e}")
             logger.warning(f"LLM TOC recognition failed, falling back to rule method: {e}")
-    else:
-        user_output.info("Using rule method to detect table of contents...")
 
     # Select corresponding patterns
     if language == 'english':
@@ -100,13 +81,11 @@ def remove_table_of_contents(content: str, language: str = None, llm_assistant=N
         # Identify table of contents start: standalone line with TOC keywords
         if stripped_line in toc_keywords or any(keyword.lower() == stripped_line.lower() for keyword in toc_keywords):
             toc_start = i
-            print(f"【Table of Contents Detection】✓ Method 1: Detected TOC keyword at line {i+1}: '{stripped_line}'")
             logger.info(f"Detected TOC title at line {i+1}: {stripped_line}")
             break
 
     # Method 2: Detect dense chapter pattern region (TOC without explicit keyword)
     if toc_start == -1:
-        print("【Table of Contents Detection】Method 1 found no TOC keyword, trying Method 2: Enhanced dense chapter pattern detection...")
         # Scan for regions with abnormally high density of chapter-like patterns
         window_size = 20  # Check 20 lines at a time
         max_score = 0
@@ -200,12 +179,6 @@ def remove_table_of_contents(content: str, language: str = None, llm_assistant=N
         # If found high-score region, consider it as TOC
         if max_score > config.toc_detection_score_threshold:  # Use configured threshold
             toc_start = max_score_start
-            print(f"【Table of Contents Detection】✓ Method 2: Detected suspected TOC region starting at line {toc_start+1}")
-            print(f"【Table of Contents Detection】Comprehensive score: {max_score:.1f}")
-            if candidate_info:
-                print(f"【Table of Contents Detection】Features: chapter count={candidate_info['chapters']}, density={candidate_info['density']:.1f}/1000 chars, "
-                      f"consecutive chapters={candidate_info['consecutive']}, short line ratio={candidate_info['short_ratio']:.1%}, "
-                      f"has page numbers={candidate_info['has_page_nums']}")
             logger.info(f"Detected suspected TOC region starting at line {toc_start+1}, comprehensive score: {max_score:.1f}")
 
     # Find TOC end
@@ -261,15 +234,8 @@ def remove_table_of_contents(content: str, language: str = None, llm_assistant=N
     # Remove TOC if found
     if toc_start != -1 and toc_end != -1 and toc_end > toc_start:
         removed_lines = toc_end - toc_start + 1
-        user_output.success("Successfully removed TOC region!")
-        user_output.detail(f"Position: line {toc_start+1} to line {toc_end+1}")
-        user_output.detail(f"Deleted: total {removed_lines} lines")
-        user_output.section_footer()
         logger.info(f"Removed TOC: line {toc_start+1} to line {toc_end+1}, total {removed_lines} lines")
         remaining_lines = lines[:toc_start] + lines[toc_end + 1:]
         return '\n'.join(remaining_lines)
-    else:
-        user_output.info("No TOC region detected")
-        user_output.section_footer()
 
     return content

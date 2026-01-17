@@ -152,8 +152,6 @@ def parse_chapters_from_content(content: str, language: str = 'chinese', config:
     # Validate matches to filter out inline references (if enabled)
     if config.enable_chapter_validation:
         chapter_matches = [match for match in all_matches if is_valid_chapter_title(match, content, language)]
-        if len(all_matches) != len(chapter_matches):
-            logger.info(f"Filtered out {len(all_matches) - len(chapter_matches)} inline chapter references")
     else:
         chapter_matches = all_matches
 
@@ -182,15 +180,6 @@ def parse_chapters_from_content(content: str, language: str = 'chinese', config:
     if resume_state:
         resume_state.set_total_chapters(total_chapters)
 
-    # Log start of chapter processing
-    if llm_assistant:
-        logger.info(f"Starting to use LLM to generate chapter titles, total {total_chapters} chapters")
-        print(f"\n{'='*60}")
-        print(f"Starting intelligent chapter title generation (total {total_chapters} chapters)")
-        if resume_state and resume_state.get_processed_count() > 0:
-            print(f"Resume from checkpoint: Already processed {resume_state.get_processed_count()} chapters, continuing...")
-        print(f"{'='*60}")
-
     # 【Optimization】Batch collect chapters that need LLM enhancement
     chapters_to_enhance = []
     chapter_data = []  # Store chapter metadata
@@ -200,8 +189,6 @@ def parse_chapters_from_content(content: str, language: str = 'chinese', config:
 
         # Resume checkpoint: skip already processed chapters (using index)
         if resume_state and resume_state.is_chapter_processed(i):
-            if llm_assistant:
-                print(f"[{i+1}/{total_chapters}] Skipping already processed chapter: {chapter_title[:20]}...")
             continue
 
         # Get chapter content (from end of current match to start of next match, or end of text)
@@ -238,8 +225,6 @@ def parse_chapters_from_content(content: str, language: str = 'chinese', config:
     enhanced_titles = {}
     if llm_assistant and chapters_to_enhance:
         try:
-            logger.info(f"Batch generating titles for {len(chapters_to_enhance)} simple chapters...")
-            print(f"\nBatch generating {len(chapters_to_enhance)} chapter titles...")
 
             batch_results = llm_assistant.generate_chapter_titles_batch(
                 chapters_to_enhance,
@@ -254,13 +239,9 @@ def parse_chapters_from_content(content: str, language: str = 'chinese', config:
                     idx = idx - 1  # Convert to 0-based index
                     if result.get('title') and result.get('confidence', 0) > 0.5:
                         enhanced_titles[idx] = result['title']
-                        logger.info(f"[{idx+1}] Generated title: {result['title']} (confidence: {result['confidence']:.2f})")
-
-            print(f"✓ Batch generation complete: {len(enhanced_titles)}/{len(chapters_to_enhance)} titles successful")
 
         except Exception as e:
             logger.warning(f"Batch title generation failed, falling back to rule extraction: {e}")
-            print(f"⚠ Batch generation failed, using rule extraction: {e}")
 
     # Process all chapters, apply enhanced titles
     for ch_data in chapter_data:
@@ -269,14 +250,10 @@ def parse_chapters_from_content(content: str, language: str = 'chinese', config:
         chapter_content = ch_data['content']
 
         # Calculate and report progress: between 5% to 95% (chapter generation stage accounts for 90%)
-        progress_percent = int((i + 1) / total_chapters * 100)
         if context:
             # Map chapter processing progress to 5% - 95% range
             mapped_progress = 5 + int((i + 1) / total_chapters * 90)
             context.report_progress(mapped_progress)
-
-        # Print progress
-        print(f"[{i+1}/{total_chapters}] ({progress_percent}%) Processing chapter: {chapter_title[:20]}...")
 
         # Apply enhanced title (if available)
         if i in enhanced_titles:
@@ -290,8 +267,6 @@ def parse_chapters_from_content(content: str, language: str = 'chinese', config:
                 chapter_number = chapter_num_match.group(1) if chapter_num_match else chapter_title
                 enhanced_title = f"{chapter_number}: {enhanced_titles[i]}"
 
-            logger.info(f"[{i+1}/{total_chapters}] Enhanced: '{chapter_title}' -> '{enhanced_title}'")
-            print(f"  ✓ Applied title: {enhanced_title}")
             final_title = enhanced_title
         elif ch_data['is_simple'] and not llm_assistant:
             # If no LLM, fall back to rule extraction
@@ -305,13 +280,10 @@ def parse_chapters_from_content(content: str, language: str = 'chinese', config:
                     chapter_num_match = re.search(r'(Chapter\s+[\dIVXivx]+)', chapter_title, re.IGNORECASE)
                     chapter_number = chapter_num_match.group(1) if chapter_num_match else chapter_title
                     final_title = f"{chapter_number}: {meaningful_title}"
-                print(f"  - Rule-extracted title: {meaningful_title}")
             else:
                 final_title = chapter_title
-                print(f"  - Keeping original title")
         else:
             final_title = chapter_title
-            print(f"  - Keeping original title")
 
         seen_titles.add(final_title)
 
@@ -330,13 +302,6 @@ def parse_chapters_from_content(content: str, language: str = 'chinese', config:
         # Resume checkpoint: mark chapter processed (using index)
         if resume_state:
             resume_state.mark_chapter_processed(i)
-
-    # Completion log
-    if llm_assistant:
-        print(f"{'='*60}")
-        print(f"✓ Chapter title generation complete! Processed {total_chapters} chapters total")
-        print(f"{'='*60}\n")
-        logger.info(f"Chapter title generation complete, processed {total_chapters} chapters total")
 
     return chapter_list
 
