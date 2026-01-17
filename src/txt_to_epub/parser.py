@@ -24,40 +24,40 @@ class ChinesePatterns:
     # Volume/Part/Book patterns
     VOLUME_PATTERN = re.compile(r'(第([一二三四五六七八九十百千万壹贰叁肆伍陆柒捌玖拾佰仟萬]+|\d{1,3})[卷部篇]\s+[^\n]*)')
     
-    # Chapter patterns - 宽进策略：章节号后面的标题文字可以为空
-    # 匹配 "第X章" (X可以是中文数字或阿拉伯数字，包括带前导零的如007)，后面可选标题文字
-    # 关键改进：
-    # 1. \d{1,4} 支持最多4位数字（如0001、007）
-    # 2. 标题文字可以为空，也可以有内容
-    # 3. 宽进原则：先匹配，后面用 is_valid_chapter_title 来严格验证
+    # Chapter patterns - Lenient strategy: chapter title text after chapter number can be empty
+    # Matches "第X章" (X can be Chinese numbers or Arabic numerals, including leading zeros like 007), followed by optional title text
+    # Key improvements:
+    # 1. \d{1,4} supports up to 4 digits (like 0001, 007)
+    # 2. Title text can be empty or have content
+    # 3. Lenient principle: match first, then strictly validate with is_valid_chapter_title
     #
-    # 标题格式支持：
-    # - 第X章（只有章节号）
-    # - 第X章 标题文字（有标题）
-    # - 第X章：标题文字（冒号分隔）
-    # - 第X章　标题文字（全角空格）
+    # Supported title formats:
+    # - 第X章 (chapter number only)
+    # - 第X章 + title text (with title)
+    # - 第X章: + title text (colon separator)
+    # - 第X章 + title text (full-width space)
     CHAPTER_PATTERN = re.compile(
-        r'(?:^|(?<=\n))'  # 必须在行首（\n 之后或文件开头）
-        r'('  # 捕获组1：整个章节标题
-            r'[ \t\r]*'  # 可选的前导空白（包括\r，支持Windows换行符）
-            r'(?:'  # 非捕获组：章节类型
-                # 普通章节：第X章 [标题]
-                r'第([一二三四五六七八九十百千万壹贰叁肴伍陆柒捌玖拾佰仟萬]+|\d{1,4})章'  # 捕获组2：章节号
-                r'(?:'  # 标题部分（可选）
-                    r'(?:[ \t\u3000]+|：|:)'  # 分隔符：空格、制表符、全角空格、冒号
-                    r'[^\r\n，。！？；:;,.!?]{0,50}'  # 标题文字（不包含换行和句子结束标点）
+        r'(?:^|(?<=\n))'  # Must be at line start (after \n or file beginning)
+        r'('  # Capture group 1: entire chapter title
+            r'[ \t\r]*'  # Optional leading whitespace (including \r, supporting Windows line breaks)
+            r'(?:'  # Non-capturing group: chapter type
+                # Regular chapter: 第X章 [title]
+                r'第([一二三四五六七八九十百千万壹贰叁肴伍陆柒捌玖拾佰仟萬]+|\d{1,4})章'  # Capture group 2: chapter number
+                r'(?:'  # Title part (optional)
+                    r'(?:[ \t\u3000]+|：|:)'  # Separator: space, tab, full-width space, colon
+                    r'[^\r\n，。！？；:;,.!?]{0,50}'  # Title text (excluding line breaks and sentence-ending punctuation)
                 r')?'
-                r'|'  # 或者
-                # 特殊章节
+                r'|'  # Or
+                # Special chapters
                 r'(?:番外|番外篇|外传|特别篇|插话|后记|尾声|终章|楔子|序章)'
                 r'(?:'
                     r'(?:[ \t\u3000]+|：|:)'
                     r'[^\r\n，。！？；:;,.!?]{0,50}'
                 r')?'
             r')'
-        r')'  # 捕获组1结束
-        r'[ \t]*'  # 可选的尾随空白
-        r'(?=\r?\n|$)',  # 后面必须是换行（支持\r\n或\n）或文件结束
+        r')'  # Capture group 1 ends
+        r'[ \t]*'  # Optional trailing whitespace
+        r'(?=\r?\n|$)',  # Must be followed by line break (supporting \r\n or \n) or file end
         re.MULTILINE
     )
     
@@ -135,11 +135,11 @@ def detect_language(content: str) -> str:
 
 def is_simple_chapter_title(title: str, language: str = 'chinese') -> bool:
     """
-    判断章节标题是否过于简单（只有章节号，没有实质内容）
+    Determine if chapter title is too simple (only chapter number, no substantial content)
 
-    :param title: 章节标题
-    :param language: 语言类型
-    :return: True 如果是简单的章节号，False 如果有实质内容
+    :param title: Chapter title
+    :param language: Language type
+    :return: True if simple chapter number, False if has substantial content
     """
     if not title:
         return True
@@ -147,11 +147,11 @@ def is_simple_chapter_title(title: str, language: str = 'chinese') -> bool:
     title = title.strip()
 
     if language == 'chinese':
-        # 匹配只有"第X章"或"第X章 "的标题
+        # Match titles with only "第X章" or "第X章 "
         simple_patterns = [
             r'^第[一二三四五六七八九十百千万\d]+章\s*$',
-            r'^第[一二三四五六七八九十百千万\d]+章\s+[\s\u3000]*$',  # 包含全角空格
-            r'^\d+[\s\u3000]*$',  # 只有数字
+            r'^第[一二三四五六七八九十百千万\d]+章\s+[\s\u3000]*$',  # Including full-width space
+            r'^\d+[\s\u3000]*$',  # Only numbers
             r'^第\d+章\s*$',
             r'^第\d+章\s+[\s\u3000]*$'
         ]
@@ -160,12 +160,12 @@ def is_simple_chapter_title(title: str, language: str = 'chinese') -> bool:
             if re.match(pattern, title):
                 return True
 
-        # 如果标题长度小于等于5个字符，且包含"第"和"章"，认为是简单标题
+        # If title length is <= 5 characters and contains "第" and "章", consider it simple
         if len(title) <= 5 and '第' in title and '章' in title:
             return True
 
     else:
-        # 英文简单标题模式
+        # English simple title patterns
         simple_patterns = [
             r'^Chapter\s+\d+\s*$',
             r'^Ch\.?\s+\d+\s*$',
@@ -182,35 +182,35 @@ def is_simple_chapter_title(title: str, language: str = 'chinese') -> bool:
 
 def extract_meaningful_title(chapter_content: str, language: str = 'chinese', max_length: int = 20) -> str:
     """
-    从章节内容中提取有意义的标题
+    Extract meaningful title from chapter content
 
-    :param chapter_content: 章节内容
-    :param language: 语言类型
-    :param max_length: 标题最大长度
-    :return: 提取的标题
+    :param chapter_content: Chapter content
+    :param language: Language type
+    :param max_length: Maximum title length
+    :return: Extracted title
     """
     if not chapter_content or not chapter_content.strip():
         return ""
 
     content = chapter_content.strip()
 
-    # 移除常见的开头词汇
+    # Remove common opening phrases
     if language == 'chinese':
-        # 移除"话说"、"且说"、"却说"等开头
+        # Remove opening phrases like "话说", "且说", "却说"
         content = re.sub(r'^(话说|且说|却说|却说|正是|正所谓|古人云|俗语说)\s*', '', content)
 
-        # 寻找第一个完整的句子
+        # Find first complete sentence
         sentences = re.split(r'[。！？；]', content)
         for sentence in sentences:
             sentence = sentence.strip()
-            if len(sentence) >= 5 and len(sentence) <= max_length * 2:  # 中文字符
-                # 检查是否包含有意义的内容
-                if re.search(r'[的之在了是]', sentence):  # 包含有意义的连接词
-                    # 截取前max_length个字符
+            if len(sentence) >= 5 and len(sentence) <= max_length * 2:  # Chinese characters
+                # Check if contains meaningful content
+                if re.search(r'[的之在了是]', sentence):  # Contains meaningful connectors
+                    # Extract first max_length characters
                     title = sentence[:max_length]
-                    # 确保不以不完整词语结束
+                    # Ensure not ending with incomplete word
                     if len(title) < len(sentence):
-                        # 尝试在标点或自然断点处结束
+                        # Try to end at punctuation or natural break point
                         break_points = [',', '，', ':', '：', ' ', '\u3000']
                         for bp in break_points:
                             if bp in title:
@@ -218,12 +218,12 @@ def extract_meaningful_title(chapter_content: str, language: str = 'chinese', ma
                                 break
                     return title.strip()
 
-        # 如果没有找到合适的句子，取前几个字符
+        # If no suitable sentence found, take first few characters
         if len(content) >= 5:
             title = content[:max_length]
-            # 避免切断词语
+            # Avoid cutting words
             if len(title) < len(content):
-                # 寻找最后一个空格或标点
+                # Find last space or punctuation
                 for i in range(len(title)-1, 0, -1):
                     if title[i] in ' ，。！？；：':
                         title = title[:i]
@@ -231,21 +231,21 @@ def extract_meaningful_title(chapter_content: str, language: str = 'chinese', ma
             return title.strip()
 
     else:
-        # 英文处理
+        # English processing
         sentences = re.split(r'[.!?;]', content)
         for sentence in sentences:
             sentence = sentence.strip()
             if len(sentence) >= 10 and len(sentence) <= max_length * 2:
-                # 包含有意义的词
+                # Contains meaningful words
                 if re.search(r'\b(the|a|an|is|are|was|were|in|on|at|to|for)\b', sentence, re.IGNORECASE):
                     title = sentence[:max_length]
-                    # 在合适的位置截断
+                    # Truncate at appropriate position
                     words = title.split()
                     if len(words) > 1:
                         title = ' '.join(words[:-1]) if len(' '.join(words)) > max_length else ' '.join(words)
                     return title.strip()
 
-        #  fallback
+        # fallback
         if len(content) >= 10:
             title = content[:max_length]
             words = title.split()
@@ -258,19 +258,19 @@ def extract_meaningful_title(chapter_content: str, language: str = 'chinese', ma
 
 def enhance_chapter_title(chapter_title: str, chapter_content: str, language: str = 'chinese', llm_assistant=None) -> str:
     """
-    增强章节标题：如果标题过于简单，尝试使用 LLM 或从内容中提取有意义的标题
+    Enhance chapter title: if title is too simple, try using LLM or extract meaningful title from content
 
-    :param chapter_title: 原始章节标题
-    :param chapter_content: 章节内容
-    :param language: 语言类型
-    :param llm_assistant: LLM 助手实例（可选）
-    :return: 增强后的标题
+    :param chapter_title: Original chapter title
+    :param chapter_content: Chapter content
+    :param language: Language type
+    :param llm_assistant: LLM assistant instance (optional)
+    :return: Enhanced title
     """
-    # 如果标题已经有实质内容，直接返回
+    # If title already has substantial content, return directly
     if not is_simple_chapter_title(chapter_title, language):
         return chapter_title
 
-    # 提取章节号
+    # Extract chapter number
     if language == 'chinese':
         chapter_num_match = re.search(r'(第[一二三四五六七八九十百千万\d]+章)', chapter_title)
         chapter_number = chapter_num_match.group(1) if chapter_num_match else chapter_title
@@ -278,10 +278,10 @@ def enhance_chapter_title(chapter_title: str, chapter_content: str, language: st
         chapter_num_match = re.search(r'(Chapter\s+[\dIVXivx]+)', chapter_title, re.IGNORECASE)
         chapter_number = chapter_num_match.group(1) if chapter_num_match else chapter_title
 
-    # 优先使用 LLM 生成标题
+    # Prioritize using LLM to generate title
     if llm_assistant:
         try:
-            logger.info(f"使用 LLM 生成章节标题: {chapter_number}")
+            logger.info(f"Using LLM to generate chapter title: {chapter_number}")
             result = llm_assistant.generate_chapter_title(
                 chapter_number=chapter_number,
                 chapter_content=chapter_content,
@@ -289,31 +289,31 @@ def enhance_chapter_title(chapter_title: str, chapter_content: str, language: st
                 max_content_length=1000
             )
 
-            # 如果 LLM 生成成功且置信度足够高
+            # If LLM generation successful and confidence high enough
             if result.get('title') and result.get('confidence', 0) > 0.5:
                 generated_title = result['title'].strip()
                 if generated_title:
-                    # 组合章节号和生成的标题
+                    # Combine chapter number and generated title
                     if language == 'chinese':
                         return f"{chapter_number} {generated_title}"
                     else:
                         return f"{chapter_number}: {generated_title}"
             else:
-                logger.warning(f"LLM 生成标题置信度过低或为空: {result.get('confidence', 0):.2f}")
+                logger.warning(f"LLM generated title confidence too low or empty: {result.get('confidence', 0):.2f}")
         except Exception as e:
-            logger.warning(f"LLM 生成标题失败，回退到规则提取: {e}")
+            logger.warning(f"LLM title generation failed, falling back to rule extraction: {e}")
 
-    # 回退方案：从内容中提取有意义的标题
+    # Fallback: extract meaningful title from content
     meaningful_title = extract_meaningful_title(chapter_content, language)
 
     if meaningful_title:
-        # 保留原始章节号，添加实质内容
+        # Keep original chapter number, add substantial content
         if language == 'chinese':
             return f"{chapter_number} {meaningful_title}"
         else:
             return f"{chapter_number}: {meaningful_title}"
 
-    # 如果无法提取有意义的内容，返回原始标题
+    # If unable to extract meaningful content, return original title
     return chapter_title
 
 
@@ -411,48 +411,48 @@ def remove_table_of_contents(content: str, language: str = None, llm_assistant=N
     if config is None:
         config = DEFAULT_CONFIG
 
-    user_output.section_header("【目录检测】开始检测文档中是否存在目录页...")
+    user_output.section_header("【Table of Contents Detection】Starting to detect if document contains table of contents...")
 
     if not content or not content.strip():
-        user_output.info("文档内容为空，跳过")
+        user_output.info("Document content is empty, skipping")
         return content
 
     # Auto-detect language
     if language is None:
         language = detect_language(content)
 
-    user_output.detail(f"检测到文档语言: {language}")
+    user_output.detail(f"Detected document language: {language}")
 
     # Try LLM-based TOC detection first if available
     if llm_assistant:
         try:
-            user_output.info("尝试使用LLM智能识别目录...")
-            logger.info("尝试使用LLM识别目录...")
+            user_output.info("Attempting to use LLM intelligent recognition of table of contents...")
+            logger.info("Attempting to use LLM to recognize table of contents...")
             toc_result = llm_assistant.identify_table_of_contents(content[:5000], language)
 
             if toc_result.get('has_toc') and toc_result.get('confidence', 0) > config.llm_toc_detection_threshold:
-                user_output.success(f"LLM确认存在目录 (置信度: {toc_result['confidence']:.2f})")
-                user_output.detail(f"原因: {toc_result.get('reason', 'N/A')}")
-                logger.info(f"LLM确认存在目录 (置信度: {toc_result['confidence']:.2f})")
-                logger.info(f"原因: {toc_result.get('reason', 'N/A')}")
+                user_output.success(f"LLM confirmed table of contents exists (confidence: {toc_result['confidence']:.2f})")
+                user_output.detail(f"Reason: {toc_result.get('reason', 'N/A')}")
+                logger.info(f"LLM confirmed table of contents exists (confidence: {toc_result['confidence']:.2f})")
+                logger.info(f"Reason: {toc_result.get('reason', 'N/A')}")
 
                 # Use rule-based method to find and remove TOC, but with LLM confirmation
                 # This provides a good balance between accuracy and robustness
                 pass  # Continue to rule-based detection below
             else:
-                user_output.detail(f"LLM判定: {'无目录' if not toc_result.get('has_toc') else '目录置信度低'} (置信度: {toc_result.get('confidence', 0):.2f})")
-                logger.info(f"LLM未检测到目录或置信度较低 (has_toc={toc_result.get('has_toc')}, confidence={toc_result.get('confidence', 0):.2f})")
+                user_output.detail(f"LLM judgment: {'No TOC' if not toc_result.get('has_toc') else 'TOC confidence low'} (confidence: {toc_result.get('confidence', 0):.2f})")
+                logger.info(f"LLM did not detect TOC or confidence low (has_toc={toc_result.get('has_toc')}, confidence={toc_result.get('confidence', 0):.2f})")
                 # If LLM says no TOC with high confidence, skip TOC removal
                 if not toc_result.get('has_toc') and toc_result.get('confidence', 0) > config.llm_no_toc_threshold:
-                    user_output.info("LLM高置信度判定无目录，跳过目录移除")
+                    user_output.info("LLM high confidence judgment: no TOC, skipping TOC removal")
                     user_output.section_footer()
-                    logger.info("LLM高置信度判定无目录，跳过目录移除")
+                    logger.info("LLM high confidence judgment: no TOC, skipping TOC removal")
                     return content
         except Exception as e:
-            user_output.warning(f"LLM识别失败，回退到规则方法: {e}")
-            logger.warning(f"LLM目录识别失败，回退到规则方法: {e}")
+            user_output.warning(f"LLM recognition failed, falling back to rule method: {e}")
+            logger.warning(f"LLM TOC recognition failed, falling back to rule method: {e}")
     else:
-        user_output.info("使用规则方法检测目录...")
+        user_output.info("Using rule method to detect table of contents...")
 
     # Select corresponding patterns
     if language == 'english':
@@ -479,13 +479,13 @@ def remove_table_of_contents(content: str, language: str = None, llm_assistant=N
         # Identify table of contents start: standalone line with TOC keywords
         if stripped_line in toc_keywords or any(keyword.lower() == stripped_line.lower() for keyword in toc_keywords):
             toc_start = i
-            print(f"【目录检测】✓ 方法1: 检测到目录关键词在第 {i+1} 行: '{stripped_line}'")
-            logger.info(f"检测到目录标题在第 {i+1} 行: {stripped_line}")
+            print(f"【Table of Contents Detection】✓ Method 1: Detected TOC keyword at line {i+1}: '{stripped_line}'")
+            logger.info(f"Detected TOC title at line {i+1}: {stripped_line}")
             break
 
     # Method 2: Detect dense chapter pattern region (TOC without explicit keyword)
     if toc_start == -1:
-        print("【目录检测】方法1未发现目录关键词，尝试方法2: 增强密集章节模式检测...")
+        print("【Table of Contents Detection】Method 1 found no TOC keyword, trying Method 2: Enhanced dense chapter pattern detection...")
         # Scan for regions with abnormally high density of chapter-like patterns
         window_size = 20  # Check 20 lines at a time
         max_score = 0
@@ -579,13 +579,13 @@ def remove_table_of_contents(content: str, language: str = None, llm_assistant=N
         # If found high-score region, consider it as TOC
         if max_score > config.toc_detection_score_threshold:  # Use configured threshold
             toc_start = max_score_start
-            print(f"【目录检测】✓ 方法2: 检测到疑似目录区域从第 {toc_start+1} 行开始")
-            print(f"【目录检测】综合评分: {max_score:.1f}")
+            print(f"【Table of Contents Detection】✓ Method 2: Detected suspected TOC region starting at line {toc_start+1}")
+            print(f"【Table of Contents Detection】Comprehensive score: {max_score:.1f}")
             if candidate_info:
-                print(f"【目录检测】特征: 章节数={candidate_info['chapters']}, 密度={candidate_info['density']:.1f}/1000字, "
-                      f"连续章节={candidate_info['consecutive']}, 短行占比={candidate_info['short_ratio']:.1%}, "
-                      f"含页码={candidate_info['has_page_nums']}")
-            logger.info(f"检测到疑似目录区域从第 {toc_start+1} 行开始，综合评分: {max_score:.1f}")
+                print(f"【Table of Contents Detection】Features: chapter count={candidate_info['chapters']}, density={candidate_info['density']:.1f}/1000 chars, "
+                      f"consecutive chapters={candidate_info['consecutive']}, short line ratio={candidate_info['short_ratio']:.1%}, "
+                      f"has page numbers={candidate_info['has_page_nums']}")
+            logger.info(f"Detected suspected TOC region starting at line {toc_start+1}, comprehensive score: {max_score:.1f}")
 
     # Find TOC end
     if toc_start != -1:
@@ -607,7 +607,7 @@ def remove_table_of_contents(content: str, language: str = None, llm_assistant=N
                 if not is_chapter:
                     # Found long content paragraph
                     toc_end = i - 1
-                    logger.info(f"目录结束于第 {toc_end+1} 行（检测到长段落正文）")
+                    logger.info(f"TOC ends at line {toc_end+1} (detected long paragraph of main content)")
                     break
 
             # Check for consecutive empty lines followed by content
@@ -628,27 +628,27 @@ def remove_table_of_contents(content: str, language: str = None, llm_assistant=N
 
                         if not is_chapter or is_preface:
                             toc_end = i
-                            logger.info(f"目录结束于第 {toc_end+1} 行（空行后接正文）")
+                            logger.info(f"TOC ends at line {toc_end+1} (empty line followed by main content)")
                             break
 
             # Safety: if scanned too far without finding end, limit TOC region
             if i - toc_start > config.toc_max_scan_lines:
                 toc_end = i
-                logger.warning(f"目录区域过长，强制在第 {toc_end+1} 行结束")
+                logger.warning(f"TOC region too long, forcing end at line {toc_end+1}")
                 break
 
     # Remove TOC if found
     if toc_start != -1 and toc_end != -1 and toc_end > toc_start:
         removed_lines = toc_end - toc_start + 1
-        user_output.success("成功移除目录区域!")
-        user_output.detail(f"位置: 第 {toc_start+1} 行 到 第 {toc_end+1} 行")
-        user_output.detail(f"删除: 共 {removed_lines} 行")
+        user_output.success("Successfully removed TOC region!")
+        user_output.detail(f"Position: line {toc_start+1} to line {toc_end+1}")
+        user_output.detail(f"Deleted: total {removed_lines} lines")
         user_output.section_footer()
-        logger.info(f"移除目录: 第 {toc_start+1} 行到第 {toc_end+1} 行，共 {removed_lines} 行")
+        logger.info(f"Removed TOC: line {toc_start+1} to line {toc_end+1}, total {removed_lines} lines")
         remaining_lines = lines[:toc_start] + lines[toc_end + 1:]
         return '\n'.join(remaining_lines)
     else:
-        user_output.info("未检测到目录区域")
+        user_output.info("No TOC region detected")
         user_output.section_footer()
 
     return content
@@ -817,30 +817,30 @@ def parse_chapters_from_content(content: str, language: str = 'chinese', config:
     seen_titles = set()  # Track seen chapter titles
     total_chapters = len(chapter_matches)
 
-    # 设置断点续传的总章节数
+    # Set total chapters for resume checkpoint
     if resume_state:
         resume_state.set_total_chapters(total_chapters)
 
-    # 记录开始处理章节
+    # Log start of chapter processing
     if llm_assistant:
-        logger.info(f"开始使用 LLM 生成章节标题，共 {total_chapters} 个章节")
+        logger.info(f"Starting to use LLM to generate chapter titles, total {total_chapters} chapters")
         print(f"\n{'='*60}")
-        print(f"开始智能生成章节标题（共 {total_chapters} 章）")
+        print(f"Starting intelligent chapter title generation (total {total_chapters} chapters)")
         if resume_state and resume_state.get_processed_count() > 0:
-            print(f"断点续传：已处理 {resume_state.get_processed_count()} 章，继续处理...")
+            print(f"Resume from checkpoint: Already processed {resume_state.get_processed_count()} chapters, continuing...")
         print(f"{'='*60}")
 
-    # 【优化】批量收集需要 LLM 增强的章节
+    # 【Optimization】Batch collect chapters that need LLM enhancement
     chapters_to_enhance = []
-    chapter_data = []  # 存储章节的元数据
+    chapter_data = []  # Store chapter metadata
 
     for i, match in enumerate(chapter_matches):
         chapter_title = match.group(1).strip()
 
-        # 断点续传：跳过已处理的章节（使用索引）
+        # Resume checkpoint: skip already processed chapters (using index)
         if resume_state and resume_state.is_chapter_processed(i):
             if llm_assistant:
-                print(f"[{i+1}/{total_chapters}] 跳过已处理章节: {chapter_title[:20]}...")
+                print(f"[{i+1}/{total_chapters}] Skipping already processed chapter: {chapter_title[:20]}...")
             continue
 
         # Get chapter content (from end of current match to start of next match, or end of text)
@@ -849,7 +849,7 @@ def parse_chapters_from_content(content: str, language: str = 'chinese', config:
         chapter_content = content[chapter_start:chapter_end].strip('\n\r')
 
         if chapter_title and chapter_title not in seen_titles:  # Ensure title is not empty and not duplicate
-            # 存储章节数据
+            # Store chapter data
             chapter_data.append({
                 'index': i,
                 'title': chapter_title,
@@ -857,9 +857,9 @@ def parse_chapters_from_content(content: str, language: str = 'chinese', config:
                 'is_simple': is_simple_chapter_title(chapter_title, language)
             })
 
-            # 收集需要增强的章节
+            # Collect chapters that need enhancement
             if is_simple_chapter_title(chapter_title, language):
-                # 提取章节号
+                # Extract chapter number
                 if language == 'chinese':
                     chapter_num_match = re.search(r'(第[一二三四五六七八九十百千万\d]+章)', chapter_title)
                     chapter_number = chapter_num_match.group(1) if chapter_num_match else chapter_title
@@ -873,12 +873,12 @@ def parse_chapters_from_content(content: str, language: str = 'chinese', config:
                     'content': chapter_content
                 })
 
-    # 【优化】批量调用 LLM 生成标题
+    # 【Optimization】Batch call LLM to generate titles
     enhanced_titles = {}
     if llm_assistant and chapters_to_enhance:
         try:
-            logger.info(f"批量生成 {len(chapters_to_enhance)} 个简单章节的标题...")
-            print(f"\n批量生成 {len(chapters_to_enhance)} 个章节标题...")
+            logger.info(f"Batch generating titles for {len(chapters_to_enhance)} simple chapters...")
+            print(f"\nBatch generating {len(chapters_to_enhance)} chapter titles...")
 
             batch_results = llm_assistant.generate_chapter_titles_batch(
                 chapters_to_enhance,
@@ -886,40 +886,40 @@ def parse_chapters_from_content(content: str, language: str = 'chinese', config:
                 max_content_length=400
             )
 
-            # 构建索引到标题的映射
+            # Build index to title mapping
             for result in batch_results:
                 idx = result.get('index')
                 if idx is not None:
-                    idx = idx - 1  # 转换为0-based索引
+                    idx = idx - 1  # Convert to 0-based index
                     if result.get('title') and result.get('confidence', 0) > 0.5:
                         enhanced_titles[idx] = result['title']
-                        logger.info(f"[{idx+1}] 生成标题: {result['title']} (置信度: {result['confidence']:.2f})")
+                        logger.info(f"[{idx+1}] Generated title: {result['title']} (confidence: {result['confidence']:.2f})")
 
-            print(f"✓ 批量生成完成: {len(enhanced_titles)}/{len(chapters_to_enhance)} 个标题成功")
+            print(f"✓ Batch generation complete: {len(enhanced_titles)}/{len(chapters_to_enhance)} titles successful")
 
         except Exception as e:
-            logger.warning(f"批量生成标题失败，回退到规则提取: {e}")
-            print(f"⚠ 批量生成失败，使用规则提取: {e}")
+            logger.warning(f"Batch title generation failed, falling back to rule extraction: {e}")
+            print(f"⚠ Batch generation failed, using rule extraction: {e}")
 
-    # 处理所有章节，应用增强的标题
+    # Process all chapters, apply enhanced titles
     for ch_data in chapter_data:
         i = ch_data['index']
         chapter_title = ch_data['title']
         chapter_content = ch_data['content']
 
-        # 计算并上报进度：5% 到 95% 之间（生成目录阶段占 90%）
+        # Calculate and report progress: between 5% to 95% (chapter generation stage accounts for 90%)
         progress_percent = int((i + 1) / total_chapters * 100)
         if context:
-            # 将章节处理进度映射到 5% - 95% 区间
+            # Map chapter processing progress to 5% - 95% range
             mapped_progress = 5 + int((i + 1) / total_chapters * 90)
             context.report_progress(mapped_progress)
 
-        # 打印进度
-        print(f"[{i+1}/{total_chapters}] ({progress_percent}%) 处理章节: {chapter_title[:20]}...")
+        # Print progress
+        print(f"[{i+1}/{total_chapters}] ({progress_percent}%) Processing chapter: {chapter_title[:20]}...")
 
-        # 应用增强的标题（如果有）
+        # Apply enhanced title (if available)
         if i in enhanced_titles:
-            # 提取章节号
+            # Extract chapter number
             if language == 'chinese':
                 chapter_num_match = re.search(r'(第[一二三四五六七八九十百千万\d]+章)', chapter_title)
                 chapter_number = chapter_num_match.group(1) if chapter_num_match else chapter_title
@@ -930,10 +930,10 @@ def parse_chapters_from_content(content: str, language: str = 'chinese', config:
                 enhanced_title = f"{chapter_number}: {enhanced_titles[i]}"
 
             logger.info(f"[{i+1}/{total_chapters}] Enhanced: '{chapter_title}' -> '{enhanced_title}'")
-            print(f"  ✓ 应用标题: {enhanced_title}")
+            print(f"  ✓ Applied title: {enhanced_title}")
             final_title = enhanced_title
         elif ch_data['is_simple'] and not llm_assistant:
-            # 如果没有 LLM，回退到规则提取
+            # If no LLM, fall back to rule extraction
             meaningful_title = extract_meaningful_title(chapter_content, language)
             if meaningful_title:
                 if language == 'chinese':
@@ -944,13 +944,13 @@ def parse_chapters_from_content(content: str, language: str = 'chinese', config:
                     chapter_num_match = re.search(r'(Chapter\s+[\dIVXivx]+)', chapter_title, re.IGNORECASE)
                     chapter_number = chapter_num_match.group(1) if chapter_num_match else chapter_title
                     final_title = f"{chapter_number}: {meaningful_title}"
-                print(f"  - 规则提取标题: {meaningful_title}")
+                print(f"  - Rule-extracted title: {meaningful_title}")
             else:
                 final_title = chapter_title
-                print(f"  - 保留原标题")
+                print(f"  - Keeping original title")
         else:
             final_title = chapter_title
-            print(f"  - 保留原标题")
+            print(f"  - Keeping original title")
 
         seen_titles.add(final_title)
 
@@ -966,16 +966,16 @@ def parse_chapters_from_content(content: str, language: str = 'chinese', config:
                 chapter_content = empty_content
             chapter_list.append(Chapter(title=final_title, content=chapter_content, sections=[]))
 
-        # 断点续传：标记章节已处理（使用索引）
+        # Resume checkpoint: mark chapter processed (using index)
         if resume_state:
             resume_state.mark_chapter_processed(i)
 
-    # 完成日志
+    # Completion log
     if llm_assistant:
         print(f"{'='*60}")
-        print(f"✓ 章节标题生成完成！共处理 {total_chapters} 个章节")
+        print(f"✓ Chapter title generation complete! Processed {total_chapters} chapters total")
         print(f"{'='*60}\n")
-        logger.info(f"章节标题生成完成，共处理 {total_chapters} 个章节")
+        logger.info(f"Chapter title generation complete, processed {total_chapters} chapters total")
 
     return chapter_list
 

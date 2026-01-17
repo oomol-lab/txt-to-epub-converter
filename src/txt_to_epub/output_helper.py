@@ -1,5 +1,5 @@
 """
-输出辅助模块 - 统一管理用户友好的输出和日志
+Output helper module - Unified management of user-friendly output and logging
 """
 import logging
 from typing import Optional
@@ -9,21 +9,21 @@ logger = logging.getLogger(__name__)
 
 
 class UserOutput:
-    """用户友好的输出管理器"""
+    """User-friendly output manager"""
 
     def __init__(self, verbose: bool = True):
         """
-        初始化输出管理器
+        Initialize output manager
 
-        :param verbose: 是否启用详细输出
+        :param verbose: Whether to enable verbose output
         """
         self.verbose = verbose
 
     def section_header(self, title: str):
         """
-        打印节标题
+        Print section header
 
-        :param title: 标题文本
+        :param title: Header text
         """
         if self.verbose:
             print("\n" + "=" * 60)
@@ -32,16 +32,16 @@ class UserOutput:
         logger.info(title)
 
     def section_footer(self):
-        """打印节尾部"""
+        """Print section footer"""
         if self.verbose:
             print("=" * 60 + "\n")
 
     def info(self, message: str, prefix: str = ""):
         """
-        打印信息消息
+        Print info message
 
-        :param message: 消息内容
-        :param prefix: 消息前缀（如 "✓", "⚠"）
+        :param message: Message content
+        :param prefix: Message prefix (e.g., "✓", "⚠")
         """
         if self.verbose:
             if prefix:
@@ -51,20 +51,20 @@ class UserOutput:
         logger.info(message)
 
     def success(self, message: str):
-        """打印成功消息"""
+        """Print success message"""
         self.info(message, prefix="✓")
 
     def warning(self, message: str):
-        """打印警告消息"""
+        """Print warning message"""
         self.info(message, prefix="⚠")
         logger.warning(message)
 
     def detail(self, message: str, indent: int = 2):
         """
-        打印详情消息（缩进）
+        Print detail message (indented)
 
-        :param message: 消息内容
-        :param indent: 缩进空格数
+        :param message: Message content
+        :param indent: Number of indent spaces
         """
         if self.verbose:
             print(" " * indent + message)
@@ -72,11 +72,11 @@ class UserOutput:
 
     def progress_message(self, current: int, total: int, item_name: str):
         """
-        打印进度消息
+        Print progress message
 
-        :param current: 当前进度
-        :param total: 总数
-        :param item_name: 项目名称
+        :param current: Current progress
+        :param total: Total count
+        :param item_name: Item name
         """
         if self.verbose:
             percent = int(current / total * 100) if total > 0 else 0
@@ -84,16 +84,16 @@ class UserOutput:
         logger.debug(f"Progress: {current}/{total} - {item_name}")
 
 
-# 全局实例（可选）
+# Global instance (optional)
 _default_output = None
 
 
 def get_output(verbose: bool = True) -> UserOutput:
     """
-    获取输出管理器实例
+    Get output manager instance
 
-    :param verbose: 是否启用详细输出
-    :return: UserOutput 实例
+    :param verbose: Whether to enable verbose output
+    :return: UserOutput instance
     """
     global _default_output
     if _default_output is None:

@@ -21,70 +21,70 @@ except ImportError:
 @dataclass
 class ParserConfig:
     """
-    配置类，用于自定义文本解析行为
+    Configuration class for customizing text parsing behavior
 
-    该类包含所有可配置的解析参数，用于控制章节识别、内容验证、
-    LLM 辅助、目录检测等功能的行为。
+    This class contains all configurable parsing parameters used to control
+    chapter recognition, content validation, LLM assistance, TOC detection, and other features.
     """
 
-    # ========== 内容长度阈值配置 ==========
+    # ========== Content Length Threshold Configuration ==========
 
     min_chapter_length: int = 100
     """
-    最小章节长度（字符数）
+    Minimum chapter length (character count)
 
-    默认值: 100
+    Default value: 100
 
-    说明: 用于验证章节是否过短。低于此长度的章节可能被视为误识别。
-    仅在 enable_length_validation=True 时生效。
+    Description: Used to validate if chapters are too short. Chapters below this length
+    may be considered as misidentified. Only takes effect when enable_length_validation=True.
 
-    调整建议:
-    - 短章节书籍（如诗集）: 50-80
-    - 正常小说: 100-200
-    - 长章节书籍: 500+
+    Adjustment recommendations:
+    - Short chapter books (like poetry collections): 50-80
+    - Normal novels: 100-200
+    - Long chapter books: 500+
     """
 
     min_section_length: int = 50
     """
-    最小节长度（字符数）
+    Minimum section length (character count)
 
-    默认值: 50
+    Default value: 50
 
-    说明: 用于验证节（Section）是否过短。
+    Description: Used to validate if sections are too short.
     """
 
-    # ========== 验证设置 ==========
+    # ========== Validation Settings ==========
 
     enable_chapter_validation: bool = True
     """
-    是否启用章节标题验证
+    Whether to enable chapter title validation
 
-    默认值: True
+    Default value: True
 
-    说明: 启用后，会过滤掉正文中对章节的引用（如"在第三章中"）。
-    这可以显著提高章节识别准确性，但可能略微增加处理时间。
+    Description: When enabled, filters out chapter references in main text (like "in chapter three").
+    This can significantly improve chapter recognition accuracy but may slightly increase processing time.
 
-    推荐: 保持 True，除非遇到特殊格式导致误判。
+    Recommendation: Keep True unless special formats cause false positives.
     """
 
     enable_length_validation: bool = False
     """
-    是否启用基于长度的章节验证
+    Whether to enable length-based chapter validation
 
-    默认值: False
+    Default value: False
 
-    说明: 启用后，会合并过短的章节。适用于章节识别不准确的情况。
+    Description: When enabled, merges chapters that are too short. Useful when chapter recognition is inaccurate.
 
-    注意: 可能会误合并真实的短章节。建议先尝试调整章节模式。
+    Note: May mistakenly merge genuinely short chapters. Recommend trying to adjust chapter patterns first.
     """
 
     enable_fuzzy_matching: bool = False
     """
-    是否启用模糊匹配（未来功能）
+    Whether to enable fuzzy matching (future feature)
 
-    默认值: False
+    Default value: False
 
-    说明: 预留参数，当前未实现。
+    Description: Reserved parameter, currently not implemented.
     """
 
     # Custom patterns (regex strings)
@@ -105,114 +105,114 @@ class ParserConfig:
     debug_mode: bool = False
     log_rejected_matches: bool = False
 
-    # ========== LLM辅助配置 (简化版) ==========
+    # ========== LLM Assistance Configuration (Simplified) ==========
 
     enable_llm_assistance: bool = False
-    """是否启用LLM智能目录识别 (默认关闭)"""
+    """Whether to enable LLM intelligent TOC recognition (default off)"""
 
     llm_api_key: Optional[str] = None
-    """LLM API密钥"""
+    """LLM API key"""
 
     llm_base_url: Optional[str] = None
-    """LLM API地址 (可选，用于兼容百度千帆等服务)"""
+    """LLM API address (optional, for compatibility with Baidu Qianfan and other services)"""
 
     llm_model: str = "deepseek-v3.2"
-    """使用的LLM模型"""
+    """LLM model to use"""
 
     llm_confidence_threshold: float = 0.7
     """
-    LLM 置信度阈值
+    LLM confidence threshold
 
-    范围: 0.0-1.0
-    默认值: 0.7
+    Range: 0.0-1.0
+    Default value: 0.7
 
-    说明: 规则解析的整体置信度低于此值时，才会使用 LLM 辅助。
-    - 较低的值（如 0.5）: 更频繁使用 LLM，成本更高但准确性更好
-    - 较高的值（如 0.9）: 优先使用规则解析，降低成本
+    Description: LLM assistance is only used when rule-based parsing overall confidence is below this value.
+    - Lower values (like 0.5): More frequent LLM use, higher cost but better accuracy
+    - Higher values (like 0.9): Prioritize rule-based parsing, lower cost
 
-    推荐: 0.6-0.8 之间
+    Recommendation: 0.6-0.8
     """
 
     llm_toc_detection_threshold: float = 0.7
     """
-    LLM 判断存在目录的置信度阈值
+    LLM threshold for determining TOC existence
 
-    范围: 0.0-1.0
-    默认值: 0.7
+    Range: 0.0-1.0
+    Default value: 0.7
 
-    说明: LLM 判断存在目录的置信度必须超过此值，才确认存在目录。
+    Description: LLM judgment of TOC existence must exceed this confidence threshold to confirm TOC.
 
-    调整建议:
-    - 如果误判无目录为有目录：提高到 0.8-0.9
-    - 如果漏检目录：降低到 0.5-0.6
+    Adjustment recommendations:
+    - If false positives (no TOC judged as TOC): Increase to 0.8-0.9
+    - If missing TOC detection: Decrease to 0.5-0.6
     """
 
     llm_no_toc_threshold: float = 0.8
     """
-    LLM 判断无目录的置信度阈值
+    LLM threshold for determining no TOC
 
-    范围: 0.0-1.0
-    默认值: 0.8
+    Range: 0.0-1.0
+    Default value: 0.8
 
-    说明: LLM 判断无目录的置信度超过此值时，直接跳过目录移除。
-    这可以避免不必要的规则检测，提高效率。
+    Description: When LLM judges no TOC with confidence above this threshold, directly skip TOC removal.
+    This avoids unnecessary rule-based detection and improves efficiency.
     """
 
-    # ========== 目录检测配置 ==========
+    # ========== TOC Detection Configuration ==========
 
     toc_detection_score_threshold: float = 30.0
     """
-    目录检测的综合评分阈值
+    TOC detection comprehensive score threshold
 
-    范围: 0-100
-    默认值: 30.0
+    Range: 0-100
+    Default value: 30.0
 
-    说明: 规则方法检测目录时，综合评分超过此阈值才判定为目录页。
-    评分基于以下 6 个因子：
-    1. 章节密度（章节数/1000字符）
-    2. 绝对章节数（至少5个）
-    3. 连续章节模式（3个以上连续）
-    4. 短行占比（60%以上）
-    5. 页码标记存在性
-    6. 位置靠前加分
+    Description: Rule-based TOC detection considers region as TOC only if comprehensive score exceeds this threshold.
+    Score is based on 6 factors:
+    1. Chapter density (chapters/1000 characters)
+    2. Absolute chapter count (at least 5)
+    3. Consecutive chapter patterns (3+ consecutive)
+    4. Short line ratio (60%+ short lines)
+    5. Page number markers presence
+    6. Early position bonus
 
-    调整建议:
-    - 如果漏检目录：降低到 20-25
-    - 如果误判正文为目录：提高到 40-50
-    - 如果频繁误判：考虑启用 LLM 辅助（更准确）
+    Adjustment recommendations:
+    - If missing TOC: Decrease to 20-25
+    - If false positives (main text as TOC): Increase to 40-50
+    - If frequent false positives: Consider enabling LLM assistance (more accurate)
     """
 
     toc_max_scan_lines: int = 300
     """
-    目录检测的最大扫描行数
+    Maximum TOC detection scan lines
 
-    默认值: 300
+    Default value: 300
 
-    说明: 防止误判过长区域为目录。目录通常在前 100-300 行内。
+    Description: Prevents misjudging overly long regions as TOC. TOC usually within first 100-300 lines.
 
-    调整建议:
-    - 目录很长的书籍：提高到 500-800
-    - 避免误判：降低到 150-200
+    Adjustment recommendations:
+    - Very long TOC books: Increase to 500-800
+    - Avoid false positives: Decrease to 150-200
     """
 
-    # ========== HTML 输出配置 ==========
+    # ========== HTML Output Configuration ==========
 
     enable_watermark: bool = True
     """
-    是否在生成的 EPUB 页面中显示水印
+    Whether to display watermark in generated EPUB pages
 
-    默认值: True
+    Default value: True
 
-    说明: 水印会显示在卷页和章节页的底部。
+    Description: Watermark displays at bottom of volume and chapter pages.
     """
 
     watermark_text: str = "Powered by oomol.com, Please ensure that the copyright is in compliance"
     """
-    水印文本内容
+    Watermark text content
 
-    默认值: "Powered by oomol.com, Please ensure that the copyright is in compliance"
+    Default value: "Powered by oomol.com, Please ensure that the copyright is in compliance"
 
-    说明: 自定义水印文字。设置为空字符串可隐藏水印（需 enable_watermark=True）。
+    Description: Customize watermark text. Set to empty string to hide watermark (requires enable_watermark=True).
     """
 
     @classmethod
@@ -285,7 +285,7 @@ class ParserConfig:
             language_hints=config_dict.get('language_hints', {}),
             debug_mode=config_dict.get('debug_mode', False),
             log_rejected_matches=config_dict.get('log_rejected_matches', False),
-            # LLM配置 (简化版)
+            # LLM configuration (simplified)
             enable_llm_assistance=config_dict.get('enable_llm_assistance', False),
             llm_api_key=config_dict.get('llm_api_key'),
             llm_base_url=config_dict.get('llm_base_url'),
@@ -293,10 +293,10 @@ class ParserConfig:
             llm_confidence_threshold=config_dict.get('llm_confidence_threshold', 0.7),
             llm_toc_detection_threshold=config_dict.get('llm_toc_detection_threshold', 0.7),
             llm_no_toc_threshold=config_dict.get('llm_no_toc_threshold', 0.8),
-            # 目录检测配置
+            # TOC detection configuration
             toc_detection_score_threshold=config_dict.get('toc_detection_score_threshold', 30.0),
             toc_max_scan_lines=config_dict.get('toc_max_scan_lines', 300),
-            # HTML 输出配置
+            # HTML output configuration
             enable_watermark=config_dict.get('enable_watermark', True),
             watermark_text=config_dict.get('watermark_text', 'Powered by oomol.com, Please ensure that the copyright is in compliance')
         )
@@ -321,7 +321,7 @@ class ParserConfig:
             'language_hints': self.language_hints,
             'debug_mode': self.debug_mode,
             'log_rejected_matches': self.log_rejected_matches,
-            # LLM配置 (简化版)
+            # LLM configuration (simplified)
             'enable_llm_assistance': self.enable_llm_assistance,
             'llm_api_key': self.llm_api_key,
             'llm_base_url': self.llm_base_url,
@@ -329,10 +329,10 @@ class ParserConfig:
             'llm_confidence_threshold': self.llm_confidence_threshold,
             'llm_toc_detection_threshold': self.llm_toc_detection_threshold,
             'llm_no_toc_threshold': self.llm_no_toc_threshold,
-            # 目录检测配置
+            # TOC detection configuration
             'toc_detection_score_threshold': self.toc_detection_score_threshold,
             'toc_max_scan_lines': self.toc_max_scan_lines,
-            # HTML 输出配置
+            # HTML output configuration
             'enable_watermark': self.enable_watermark,
             'watermark_text': self.watermark_text
         }

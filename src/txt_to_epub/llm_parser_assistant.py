@@ -1,11 +1,11 @@
 """
 LLM-assisted parser for ambiguous chapter detection
-大模型辅助解析器 - 使用 OpenAI SDK 实现
+LLM-Assisted Parser - Implemented using OpenAI SDK
 
-支持的模型:
-- GPT-4 系列 (推荐): gpt-4-turbo, gpt-4
-- GPT-3.5 系列 (经济): gpt-3.5-turbo
-- 其他兼容 OpenAI API 的模型
+Supported models:
+- GPT-4 series (recommended): gpt-4-turbo, gpt-4
+- GPT-3.5 series (economical): gpt-3.5-turbo
+- Other models compatible with OpenAI API
 """
 import json
 import logging
@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class ChapterCandidate:
-    """候选章节数据结构"""
+    """Candidate chapter data structure"""
     text: str
     position: int
     line_number: int
@@ -34,7 +34,7 @@ class ChapterCandidate:
 
 @dataclass
 class LLMDecision:
-    """LLM决策结果数据结构"""
+    """LLM decision result data structure"""
     is_chapter: bool
     confidence: float
     reason: str
@@ -43,26 +43,26 @@ class LLMDecision:
 
 
 class LLMParserAssistant:
-    """LLM辅助解析器 - OpenAI 实现"""
+    """LLM-Assisted Parser - OpenAI Implementation"""
 
     def __init__(self, api_key: str = None, model: str = "gpt-4-turbo",
                  base_url: str = None, organization: str = None):
         """
-        初始化LLM助手
+        Initialize LLM assistant
 
-        :param api_key: OpenAI API密钥 (如果为None,将从环境变量读取)
-        :param model: 使用的模型
-        :param base_url: API基础URL (用于兼容其他服务)
-        :param organization: OpenAI组织ID (可选)
+        :param api_key: OpenAI API key (if None, will read from environment variables)
+        :param model: Model to use
+        :param base_url: API base URL (for compatibility with other services)
+        :param organization: OpenAI organization ID (optional)
         """
         try:
             from openai import OpenAI
         except ImportError:
             raise ImportError(
-                "OpenAI SDK未安装。请运行: pip install openai"
+                "OpenAI SDK not installed. Please run: pip install openai"
             )
 
-        # 初始化OpenAI客户端
+        # Initialize OpenAI client
         client_kwargs = {}
         if api_key:
             client_kwargs['api_key'] = api_key
@@ -75,7 +75,7 @@ class LLMParserAssistant:
         self.model = model
         self.max_tokens = 128000
 
-        # 统计信息
+        # Statistics information
         self.stats = {
             'total_calls': 0,
             'total_input_tokens': 0,
@@ -83,7 +83,7 @@ class LLMParserAssistant:
             'total_cost': 0.0
         }
 
-        # 模型定价 (USD per 1K tokens)
+        # Model pricing (USD per 1K tokens)
         self.pricing = {
             'gpt-4-turbo': {'input': 0.01, 'output': 0.03},
             'gpt-4': {'input': 0.03, 'output': 0.06},
@@ -91,7 +91,7 @@ class LLMParserAssistant:
             'gpt-3.5-turbo-16k': {'input': 0.003, 'output': 0.004},
         }
 
-        logger.info(f"LLM助手初始化完成: 模型={model}")
+        logger.info(f"LLM assistant initialized: model={model}")
 
     def analyze_chapter_candidates(
         self,
@@ -101,20 +101,20 @@ class LLMParserAssistant:
         doc_context: Dict = None
     ) -> List[LLMDecision]:
         """
-        分析候选章节,判断是否为真实章节
+        Analyze chapter candidates to determine if they are real chapters
 
-        :param candidates: 候选章节列表
-        :param full_content: 完整文本内容
-        :param existing_chapters: 已确认的章节信息
-        :param doc_context: 文档上下文信息
-        :return: 决策结果列表
+        :param candidates: List of chapter candidates
+        :param full_content: Full text content
+        :param existing_chapters: Confirmed chapter information
+        :param doc_context: Document context information
+        :return: List of decision results
         """
         if not candidates:
             return []
 
-        logger.info(f"LLM分析 {len(candidates)} 个候选章节...")
+        logger.info(f"LLM analyzing {len(candidates)} chapter candidates...")
 
-        # 构建prompt
+        # Build prompt
         prompt = self._build_chapter_analysis_prompt(
             candidates,
             full_content,
@@ -122,15 +122,15 @@ class LLMParserAssistant:
             doc_context
         )
 
-        # 调用LLM
+        # Call LLM
         response = self._call_llm(prompt)
 
-        # 解析响应
+        # Parse response
         decisions = self._parse_llm_response(response)
 
-        # 更新统计
+        # Update statistics
         confirmed = sum(1 for d in decisions if d.is_chapter)
-        logger.info(f"LLM确认 {confirmed}/{len(candidates)} 个为真实章节")
+        logger.info(f"LLM confirmed {confirmed}/{len(candidates)} as real chapters")
 
         return decisions
 
@@ -141,42 +141,42 @@ class LLMParserAssistant:
         language: str = 'chinese'
     ) -> List[Dict]:
         """
-        对无明显章节标记的文本,推断章节结构
+        Infer chapter structure for text without obvious chapter markers
 
-        :param content: 文本内容
-        :param max_length: 最大分析长度
-        :param language: 文档语言
-        :return: 建议的章节结构
+        :param content: Text content
+        :param max_length: Maximum analysis length
+        :param language: Document language
+        :return: Suggested chapter structure
         """
-        logger.info(f"LLM推断结构,文本长度: {len(content)} 字符...")
+        logger.info(f"LLM inferring structure, text length: {len(content)} characters...")
 
-        # 截取分析样本
+        # Extract analysis sample
         sample = content[:max_length]
 
-        prompt = f"""你是文档结构分析专家。以下文本没有明显章节标记,请分析并建议章节划分。
+        prompt = f"""You are a document structure analysis expert. The following text lacks clear chapter markers; please analyze and suggest chapter divisions.
 
-【文本样本】({len(sample)}字符)
+【Text Sample】({len(sample)} characters)
 {sample}
 
-【语言】{language}
+【Language】{language}
 
-【任务】
-1. 识别内容的主题变化点
-2. 建议章节划分位置
-3. 为每个章节生成标题
+【Task】
+1. Identify topic transition points in the content
+2. Suggest chapter division positions
+3. Generate a title for each chapter
 
-输出JSON格式:
+Output JSON format:
 {{
   "suggested_chapters": [
     {{
       "start_char": 0,
       "end_char": 500,
-      "title": "建议标题",
-      "reason": "划分依据",
+      "title": "Suggested title",
+      "reason": "Basis for division",
       "confidence": 0.85
     }}
   ],
-  "format_analysis": "格式特点分析",
+  "format_analysis": "Analysis of format characteristics",
   "confidence": 0.8
 }}
 """
@@ -184,7 +184,7 @@ class LLMParserAssistant:
         response = self._call_llm(prompt, max_tokens=128000)
         result = self._parse_structure_response(response)
 
-        logger.info(f"LLM建议 {len(result)} 个章节")
+        logger.info(f"LLM suggested {len(result)} chapters")
         return result
 
     def disambiguate_reference(
@@ -194,14 +194,14 @@ class LLMParserAssistant:
         context: Dict
     ) -> Dict:
         """
-        消歧:判断是章节标题还是正文引用（支持中英文）
+        Disambiguate: determine if chapter title or text reference (supports Chinese and English)
 
-        :param text_snippet: 包含候选的文本片段
-        :param candidate: 候选章节文本
-        :param context: 上下文信息
-        :return: 决策字典
+        :param text_snippet: Text snippet containing candidate
+        :param candidate: Candidate chapter text
+        :param context: Context information
+        :return: Decision dictionary
         """
-        logger.debug(f"LLM消歧: {candidate}")
+        logger.debug(f"LLM disambiguation: {candidate}")
 
         language = context.get('language', 'chinese')
 
@@ -229,51 +229,51 @@ Response Format:
 }}
 """
         else:
-            prompt = f"""判断以下文本中的"{candidate}"是章节标题还是正文中的引用?
+            prompt = f"""Determine whether this is a chapter title or a reference in the following Chinese text?
 
-【文本片段】
+【Text Snippet】
 {text_snippet}
 
-【上下文】
-- 前一章节: {context.get('prev_chapter', 'N/A')}
-- 文档类型: {context.get('doc_type', '未知')}
-- 语言: 中文
+【Context】
+- Previous Chapter: {context.get('prev_chapter', 'N/A')}
+- Document Type: {context.get('doc_type', 'Unknown')}
+- Language: Chinese
 
-分析要点:
-1. 位置: 独占一行还是句子中间?
-2. 语法: 是否在句子结构中?
-3. 格式: 是否符合章节标题格式?
+Analysis Points:
+1. Position: Standalone on a line or in the middle of a sentence?
+2. Grammar: Is it part of sentence structure?
+3. Format: Does it match chapter title format?
 
-回答格式:
+Response Format:
 {{
-  "type": "chapter" 或 "reference",
+  "type": "chapter" or "reference",
   "confidence": 0.0-1.0,
-  "reason": "判断理由"
+  "reason": "Reasoning for judgment"
 }}
 """
 
         response = self._call_llm(prompt, max_tokens=128000)
 
-        # 处理空响应
+        # Handle empty response
         if not response or not response.strip():
-            logger.warning("LLM返回空响应（消歧）")
+            logger.warning("LLM returned empty response (disambiguation)")
             return {
                 'type': 'reference',
                 'confidence': 0.5,
-                'reason': 'LLM未能提供明确判断'
+                'reason': 'LLM could not provide clear judgment'
             }
 
         try:
             result = json.loads(response)
         except json.JSONDecodeError as e:
-            logger.error(f"JSON解析失败（消歧）: {e}")
+            logger.error(f"JSON parsing failed (disambiguation): {e}")
             return {
                 'type': 'reference',
                 'confidence': 0.5,
-                'reason': '解析失败，保守判断为引用'
+                'reason': 'Parsing failed, conservatively judging as reference'
             }
 
-        logger.debug(f"决策: {result['type']} (置信度: {result['confidence']})")
+        logger.debug(f"Decision: {result['type']} (confidence: {result['confidence']})")
         return result
 
     def identify_table_of_contents(
@@ -282,13 +282,13 @@ Response Format:
         language: str = 'chinese'
     ) -> Dict:
         """
-        识别文本中是否包含目录页，并返回目录的位置范围
+        Identify if text contains table of contents page and return TOC location range
 
-        :param content_sample: 文本样本（前1000行或更多）
-        :param language: 语言类型
-        :return: 目录识别结果
+        :param content_sample: Text sample (first 1000 lines or more)
+        :param language: Language type
+        :return: TOC identification result
         """
-        logger.info("LLM识别目录页...")
+        logger.info("LLM identifying table of contents page...")
 
         if language == 'english':
             prompt = f"""You are a document structure analysis expert. Please identify whether the following text contains a Table of Contents (TOC) page.
@@ -324,61 +324,61 @@ Carefully analyze if there is a TOC section, even WITHOUT explicit "Contents" or
 }}
 """
         else:
-            prompt = f"""你是文档结构分析专家。请识别以下文本中是否包含目录页。
+            prompt = f"""You are a document structure analysis expert. Please identify whether the following text contains a table of contents page.
 
-【文本样本】(前3000字符)
+【Text Sample】(first 3000 characters)
 {content_sample[:3000]}
 
-【任务】
-仔细分析是否存在目录页，即使**没有明确的"目录"或"CONTENTS"标识**。
+【Task】
+Carefully analyze if there is a table of contents page, even **without explicit "Contents" or "CONTENTS" labels**.
 
-【目录页的关键特征】
-1. **章节模式密集**：多行包含"第X章"、"第X部"等模式
-2. **连续短行**：行内容简短（通常 < 80字符），只有章节名
-3. **页码标记**：行尾有数字（如："第一章 开始 ... 15"）
-4. **缺乏叙事内容**：没有故事正文，只有标题和数字
-5. **位置靠前**：通常在文档开头（前100-500行）
-6. **格式一致**：所有条目遵循相似格式
+【Key Characteristics of Table of Contents】
+1. **High density of chapter patterns**: Multiple lines containing "Chapter X", "Part X" patterns
+2. **Consecutive short lines**: Line content is brief (usually < 80 characters), only chapter names
+3. **Page number markers**: Numbers at end of lines (e.g., "Chapter 1 Beginning ... 15")
+4. **Lack of narrative content**: No story text, just titles and numbers
+5. **Early position**: Usually at document beginning (first 100-500 lines)
+6. **Consistent format**: All entries follow similar format
 
-【重要提示】
-- 目录可以没有"目录"这个词
-- 重点关注结构模式，而非关键词
-- 寻找5个以上连续的章节样式条目
+【Important Notes】
+- Table of contents may not have the word "contents"
+- Focus on structural patterns, not keywords
+- Look for 5 or more consecutive chapter-style entries
 
-【输出格式】JSON:
+【Output Format】JSON:
 {{
   "has_toc": true/false,
   "confidence": 0.0-1.0,
-  "start_indicator": "目录开始位置描述（如：'第5行' 或 '序言之后'）",
-  "end_indicator": "目录结束位置描述（如：'第45行' 或 '第一个长段落前'）",
-  "reason": "详细说明判断理由（提及观察到的具体模式）",
-  "toc_entries_count": 估计的目录条目数量,
-  "key_evidence": ["证据1", "证据2", "证据3"]
+  "start_indicator": "Description of where TOC starts (e.g., 'line 5' or 'after preface')",
+  "end_indicator": "Description of where TOC ends (e.g., 'line 45' or 'before first long paragraph')",
+  "reason": "Detailed explanation of reasoning (mention specific patterns observed)",
+  "toc_entries_count": Estimated number of TOC entries,
+  "key_evidence": ["evidence 1", "evidence 2", "evidence 3"]
 }}
 """
 
         response = self._call_llm(prompt, max_tokens=128000, temperature=0.1)
 
-        # 处理空响应
+        # Handle empty response
         if not response or not response.strip():
-            logger.warning("LLM返回空响应（目录识别）")
+            logger.warning("LLM returned empty response (TOC identification)")
             return {
                 'has_toc': False,
                 'confidence': 0.0,
-                'reason': 'LLM未能提供判断'
+                'reason': 'LLM could not provide judgment'
             }
 
         try:
             result = json.loads(response)
-            logger.info(f"目录识别结果: {'发现目录' if result.get('has_toc') else '无目录'} "
-                       f"(置信度: {result.get('confidence', 0):.2f})")
+            logger.info(f"TOC identification result: {'Found TOC' if result.get('has_toc') else 'No TOC'} "
+                       f"(confidence: {result.get('confidence', 0):.2f})")
             return result
         except json.JSONDecodeError as e:
-            logger.error(f"JSON解析失败（目录识别）: {e}")
+            logger.error(f"JSON parsing failed (TOC identification): {e}")
             return {
                 'has_toc': False,
                 'confidence': 0.0,
-                'reason': '解析失败',
+                'reason': 'Parsing failed',
                 'error': str(e)
             }
 
@@ -388,48 +388,48 @@ Carefully analyze if there is a TOC section, even WITHOUT explicit "Contents" or
         observed_patterns: List[str]
     ) -> Dict:
         """
-        识别特殊格式书籍的章节模式
+        Identify chapter patterns for books with special formats
 
-        :param content_sample: 文本样本
-        :param observed_patterns: 观察到的模式
-        :return: 格式识别结果
+        :param content_sample: Text sample
+        :param observed_patterns: Observed patterns
+        :return: Format identification result
         """
-        logger.info("LLM识别特殊格式...")
+        logger.info("LLM identifying special format...")
 
         patterns_text = "\n".join(f"- {p}" for p in observed_patterns)
 
-        prompt = f"""这是一本特殊格式的书籍,请帮助识别其章节结构。
+        prompt = f"""This is a book with a special format. Please help identify its chapter structure.
 
-【文本样本】
+【Text Sample】
 {content_sample[:2000]}
 
-【观察到的模式】
+【Observed Patterns】
 {patterns_text}
 
-请分析:
-1. 该书采用什么章节标记方式?
-2. 如何识别章节边界?
-3. 建议的正则表达式
+Please analyze:
+1. What chapter marking method does this book use?
+2. How to identify chapter boundaries?
+3. Suggested regular expression
 
-输出JSON:
+Output JSON:
 {{
-  "format_type": "格式类型",
-  "chapter_pattern": "模式描述",
-  "identification_rules": ["规则1", "规则2"],
+  "format_type": "Format type",
+  "chapter_pattern": "Pattern description",
+  "identification_rules": ["Rule 1", "Rule 2"],
   "sample_chapters": [{{"title": "...", "position": 0}}],
   "confidence": 0.8,
-  "suggested_regex": "正则表达式"
+  "suggested_regex": "Regular expression"
 }}
 """
 
         response = self._call_llm(prompt, max_tokens=128000)
 
-        # 调试：打印原始响应
-        logger.debug(f"LLM原始响应: {response}")
+        # Debug: print raw response
+        logger.debug(f"LLM raw response: {response}")
 
-        # 处理空响应
+        # Handle empty response
         if not response or not response.strip():
-            logger.warning("LLM返回空响应")
+            logger.warning("LLM returned empty response")
             return {
                 'format_type': 'unknown',
                 'chapter_pattern': 'unknown',
@@ -440,8 +440,8 @@ Carefully analyze if there is a TOC section, even WITHOUT explicit "Contents" or
         try:
             result = json.loads(response)
         except json.JSONDecodeError as e:
-            logger.error(f"JSON解析失败: {e}, 原始响应: {response[:200]}")
-            # 返回默认结果
+            logger.error(f"JSON parsing failed: {e}, raw response: {response[:200]}")
+            # Return default result
             return {
                 'format_type': 'parse_error',
                 'chapter_pattern': 'unknown',
@@ -450,7 +450,7 @@ Carefully analyze if there is a TOC section, even WITHOUT explicit "Contents" or
                 'error': str(e)
             }
 
-        logger.info(f"识别格式: {result.get('format_type', 'unknown')}")
+        logger.info(f"Identified format: {result.get('format_type', 'unknown')}")
         return result
 
     def generate_chapter_title(
@@ -461,21 +461,21 @@ Carefully analyze if there is a TOC section, even WITHOUT explicit "Contents" or
         max_content_length: int = 400
     ) -> Dict:
         """
-        使用 LLM 根据章节内容生成合适的章节标题
+        Use LLM to generate appropriate chapter title based on chapter content
 
-        :param chapter_number: 章节号（如 "第007章", "Chapter 7"）
-        :param chapter_content: 章节内容（开头部分）
-        :param language: 语言类型
-        :param max_content_length: 用于分析的最大内容长度（默认400字符，约200个汉字）
-        :return: 包含生成标题的字典
+        :param chapter_number: Chapter number (e.g., "Chapter 007", "Chapter 7")
+        :param chapter_content: Chapter content (beginning portion)
+        :param language: Language type
+        :param max_content_length: Maximum content length for analysis (default 400 characters, about 200 Chinese characters)
+        :return: Dictionary containing generated title
         """
-        logger.info(f"LLM生成章节标题: {chapter_number}")
+        logger.info(f"LLM generating chapter title: {chapter_number}")
 
-        # 限制内容长度 - 减少到400字符以提高速度
+        # Limit content length - reduced to 400 characters to improve speed
         content_sample = chapter_content[:max_content_length].strip()
 
         if language == 'english':
-            # 精简英文提示词
+            # Simplified English prompt
             prompt = f"""Generate a 3-8 word chapter title for: {chapter_number}
 
 Content: {content_sample}
@@ -485,45 +485,45 @@ Requirements: Concise, meaningful, avoid dialogue quotes.
 JSON response:
 {{"title": "title text", "confidence": 0.0-1.0}}"""
         else:
-            # 精简中文提示词
-            prompt = f"""为章节生成3-12字的标题：{chapter_number}
+            # Simplified Chinese prompt
+            prompt = f"""Generate a 3-12 character title for the chapter: {chapter_number}
 
-内容：{content_sample}
+Content: {content_sample}
 
-要求：简洁有意义，避免对话引号。
+Requirements: Concise and meaningful, avoid dialogue quotes.
 
-JSON格式：
-{{"title": "标题", "confidence": 0.0-1.0}}"""
+JSON format:
+{{"title": "title", "confidence": 0.0-1.0}}"""
 
         try:
             response = self._call_llm(prompt, temperature=0.3, max_tokens=100)
             result = json.loads(response)
 
-            # 验证结果
+            # Validate result
             if 'title' not in result:
-                logger.warning("LLM 响应缺少 'title' 字段")
+                logger.warning("LLM response missing 'title' field")
                 result['title'] = ""
 
             if 'confidence' not in result:
                 result['confidence'] = 0.5
 
-            logger.info(f"✓ 生成标题: {result.get('title', 'N/A')} (置信度: {result.get('confidence', 0):.2f})")
+            logger.info(f"✓ Generated title: {result.get('title', 'N/A')} (confidence: {result.get('confidence', 0):.2f})")
             return result
 
         except json.JSONDecodeError as e:
-            logger.error(f"JSON解析失败（标题生成）: {e}, 原始响应: {response[:200] if 'response' in locals() else 'N/A'}")
+            logger.error(f"JSON parsing failed (title generation): {e}, raw response: {response[:200] if 'response' in locals() else 'N/A'}")
             return {
                 'title': "",
                 'confidence': 0.0,
-                'reason': f'解析失败: {str(e)}',
+                'reason': f'Parsing failed: {str(e)}',
                 'error': str(e)
             }
         except Exception as e:
-            logger.error(f"生成标题失败: {e}")
+            logger.error(f"Title generation failed: {e}")
             return {
                 'title': "",
                 'confidence': 0.0,
-                'reason': f'生成失败: {str(e)}',
+                'reason': f'Generation failed: {str(e)}',
                 'error': str(e)
             }
 
@@ -534,30 +534,30 @@ JSON格式：
         max_content_length: int = 400
     ) -> List[Dict]:
         """
-        批量生成章节标题（一次 LLM 调用处理多个章节）
+        Batch generate chapter titles (process multiple chapters in one LLM call)
 
-        :param chapters_info: 章节信息列表，每项包含 {"number": "第X章", "content": "内容..."}
-        :param language: 语言类型
-        :param max_content_length: 每个章节用于分析的最大内容长度
-        :return: 标题结果列表，每项包含 {"title": "标题", "confidence": 0.9}
+        :param chapters_info: List of chapter information, each item contains {"number": "Chapter X", "content": "content..."}
+        :param language: Language type
+        :param max_content_length: Maximum content length for analysis per chapter
+        :return: List of title results, each item contains {"title": "title", "confidence": 0.9}
         """
         if not chapters_info:
             return []
 
-        logger.info(f"LLM批量生成 {len(chapters_info)} 个章节标题...")
+        logger.info(f"LLM batch generating {len(chapters_info)} chapter titles...")
 
-        # 限制批量大小，避免超过 token 限制
-        batch_size = 50  # 每次最多处理50个章节
+        # Limit batch size to avoid exceeding token limit
+        batch_size = 50  # Process up to 50 chapters at a time
         all_results = []
 
         for batch_start in range(0, len(chapters_info), batch_size):
             batch = chapters_info[batch_start:batch_start + batch_size]
 
-            # 构建批量章节列表
+            # Build batch chapter list
             chapters_text = []
             for i, ch_info in enumerate(batch, start=batch_start + 1):
                 content_sample = ch_info['content'][:max_content_length].strip()
-                chapters_text.append(f"{i}. {ch_info['number']}\n内容: {content_sample[:200]}...")
+                chapters_text.append(f"{i}. {ch_info['number']}\nContent: {content_sample[:200]}...")
 
             chapters_list = "\n\n".join(chapters_text)
 
@@ -579,20 +579,20 @@ JSON response format:
   ]
 }}"""
             else:
-                prompt = f"""为以下章节生成简洁标题（3-12字），基于章节内容：
+                prompt = f"""Generate concise titles (3-12 characters) for the following chapters based on their content:
 
 {chapters_list}
 
-要求：
-- 标题要有意义，反映内容
-- 避免对话引号
-- 保持简洁
+Requirements:
+- Title should be meaningful and reflect the content
+- Avoid dialogue quotes
+- Keep titles concise
 
-JSON格式：
+JSON format:
 {{
   "titles": [
-    {{"index": 1, "title": "生成的标题", "confidence": 0.0-1.0}},
-    {{"index": 2, "title": "生成的标题", "confidence": 0.0-1.0}}
+    {{"index": 1, "title": "generated title", "confidence": 0.0-1.0}},
+    {{"index": 2, "title": "generated title", "confidence": 0.0-1.0}}
   ]
 }}"""
 
@@ -600,29 +600,29 @@ JSON格式：
                 response = self._call_llm(prompt, temperature=0.3, max_tokens=2000)
                 result = json.loads(response)
 
-                # 解析结果
+                # Parse results
                 titles = result.get('titles', [])
 
-                # 创建索引到结果的映射
+                # Create index-to-result mapping
                 title_map = {item['index']: item for item in titles}
 
-                # 按原始顺序返回结果
+                # Return results in original order
                 for i, ch_info in enumerate(batch, start=batch_start + 1):
                     if i in title_map:
                         all_results.append(title_map[i])
                     else:
-                        # 如果 LLM 未返回该章节的标题，使用默认值
+                        # If LLM didn't return title for this chapter, use default value
                         all_results.append({
                             'index': i,
                             'title': "",
                             'confidence': 0.0
                         })
 
-                logger.info(f"✓ 批量生成完成: {len(titles)}/{len(batch)} 个标题")
+                logger.info(f"✓ Batch generation complete: {len(titles)}/{len(batch)} titles")
 
             except json.JSONDecodeError as e:
-                logger.error(f"JSON解析失败（批量标题生成）: {e}")
-                # 返回空结果
+                logger.error(f"JSON parsing failed (batch title generation): {e}")
+                # Return empty results
                 for i in range(len(batch)):
                     all_results.append({
                         'index': batch_start + i + 1,
@@ -631,7 +631,7 @@ JSON格式：
                         'error': str(e)
                     })
             except Exception as e:
-                logger.error(f"批量生成标题失败: {e}")
+                logger.error(f"Batch title generation failed: {e}")
                 for i in range(len(batch)):
                     all_results.append({
                         'index': batch_start + i + 1,
@@ -640,7 +640,7 @@ JSON格式：
                         'error': str(e)
                     })
 
-        logger.info(f"批量标题生成完成: 共 {len(all_results)} 个章节")
+        logger.info(f"Batch title generation complete: total {len(all_results)} chapters")
         return all_results
 
 
@@ -651,18 +651,18 @@ JSON格式：
         existing_chapters: List[Dict],
         doc_context: Dict = None
     ) -> str:
-        """构建章节分析prompt（支持中英文）"""
+        """Build chapter analysis prompt (supports Chinese and English)"""
 
         doc_context = doc_context or {}
         language = doc_context.get('language', 'chinese')
 
-        # 计算平均章节长度
+        # Calculate average chapter length
         if existing_chapters:
             avg_length = sum(ch.get('length', 0) for ch in existing_chapters) / len(existing_chapters)
         else:
             avg_length = 0
 
-        # 根据语言选择prompt模板
+        # Select prompt template based on language
         if language == 'english':
             return self._build_english_prompt(candidates, existing_chapters, avg_length, doc_context)
         else:
@@ -675,70 +675,70 @@ JSON格式：
         avg_length: float,
         doc_context: Dict
     ) -> str:
-        """构建中文章节分析prompt"""
+        """Build Chinese chapter analysis prompt"""
 
-        # 格式化候选项
+        # Format candidates
         candidates_text = []
         for i, c in enumerate(candidates, 1):
-            issues_text = f" [问题: {', '.join(c.issues)}]" if c.issues else ""
+            issues_text = f" [Issues: {', '.join(c.issues)}]" if c.issues else ""
             candidates_text.append(
-                f"{i}. \"{c.text}\" (第{c.line_number}行, "
-                f"置信度:{c.confidence:.2f}, 类型:{c.pattern_type}){issues_text}"
+                f"{i}. \"{c.text}\" (Line {c.line_number}, "
+                f"Confidence:{c.confidence:.2f}, Type:{c.pattern_type}){issues_text}"
             )
 
-        # 提取每个候选的上下文
+        # Extract context for each candidate
         contexts = []
         for i, c in enumerate(candidates, 1):
             context = f"""
-【候选{i}上下文】
-前文: ...{c.context_before}
+【Candidate {i} Context】
+Before: ...{c.context_before}
 >>> {c.text} <<<
-后文: {c.context_after}..."""
+After: {c.context_after}..."""
             contexts.append(context)
 
-        # 已确认章节示例
+        # Confirmed chapter examples
         chapter_examples = []
         for ch in existing_chapters[:5]:
             chapter_examples.append(f"- {ch.get('title', 'Unknown')}")
 
-        prompt = f"""你是文档结构分析专家。请判断以下候选项是否为真正的章节标题。
+        prompt = f"""You are a document structure analysis expert. Please determine whether the following candidates are genuine chapter titles.
 
-【文档信息】
-- 文档类型: {doc_context.get('doc_type', '未知')}
-- 语言: 中文
-- 已识别章节数: {len(existing_chapters)}
-- 平均章节长度: {avg_length:.0f}字
+【Document Information】
+- Document Type: {doc_context.get('doc_type', 'Unknown')}
+- Language: Chinese
+- Identified Chapters: {len(existing_chapters)}
+- Average Chapter Length: {avg_length:.0f} characters
 
-【已确认章节示例】
-{chr(10).join(chapter_examples) if chapter_examples else '暂无'}
+【Confirmed Chapter Examples】
+{chr(10).join(chapter_examples) if chapter_examples else 'None yet'}
 
-【待判断候选项】
+【Candidates to Judge】
 {chr(10).join(candidates_text)}
 
 {chr(10).join(contexts)}
 
-【判断标准】
-1. ✓ 独占一行
-2. ✓ 前后有适当分隔
-3. ✓ 不在句子语法结构中
-4. ✓ 格式与已识别章节一致
-5. ✗ 位于句子中间
-6. ✗ 前有"在/如/见"等引用词
-7. ✗ 后有"中/里/结束时"等连接词
+【Judgment Criteria】
+1. ✓ Standalone on its own line
+2. ✓ Properly separated before and after
+3. ✓ Not embedded in sentence grammar structure
+4. ✓ Format consistent with identified chapters
+5. ✗ Located in middle of sentence
+6. ✗ Preceded by reference words like "in/as/see"
+7. ✗ Followed by connectors like "in/inside/at the end of"
 
-请为每个候选给出判断,JSON格式:
+Please provide judgment for each candidate in JSON format:
 {{
   "decisions": [
     {{
       "index": 1,
       "is_chapter": true/false,
       "confidence": 0.0-1.0,
-      "reason": "详细理由",
+      "reason": "Detailed reasoning",
       "action": "accept/reject/modify",
-      "suggested_title": "如需修改的标题"
+      "suggested_title": "Suggested title if modification needed"
     }}
   ],
-  "overall_analysis": "整体分析"
+  "overall_analysis": "Overall analysis"
 }}
 """
         return prompt
@@ -750,9 +750,9 @@ JSON格式：
         avg_length: float,
         doc_context: Dict
     ) -> str:
-        """构建英文章节分析prompt"""
+        """Build English chapter analysis prompt"""
 
-        # 格式化候选项
+        # Format candidates
         candidates_text = []
         for i, c in enumerate(candidates, 1):
             issues_text = f" [Issues: {', '.join(c.issues)}]" if c.issues else ""
@@ -761,7 +761,7 @@ JSON格式：
                 f"Confidence:{c.confidence:.2f}, Type:{c.pattern_type}){issues_text}"
             )
 
-        # 提取每个候选的上下文
+        # Extract context for each candidate
         contexts = []
         for i, c in enumerate(candidates, 1):
             context = f"""
@@ -771,7 +771,7 @@ Before: ...{c.context_before}
 After: {c.context_after}..."""
             contexts.append(context)
 
-        # 已确认章节示例
+        # Confirmed chapter examples
         chapter_examples = []
         for ch in existing_chapters[:5]:
             chapter_examples.append(f"- {ch.get('title', 'Unknown')}")
@@ -825,21 +825,21 @@ Please provide judgment for each candidate in JSON format:
         temperature: float = 0.1
     ) -> str:
         """
-        调用LLM API
+        Call LLM API
 
-        :param prompt: 提示词
-        :param max_tokens: 最大token数
-        :param temperature: 温度参数 (0-2, 越低越确定)
-        :return: LLM响应文本
+        :param prompt: Prompt text
+        :param max_tokens: Maximum token count
+        :param temperature: Temperature parameter (0-2, lower means more deterministic)
+        :return: LLM response text
         """
         try:
             self.stats['total_calls'] += 1
 
-            # 构建消息
+            # Build messages
             messages = [
                 {
                     "role": "system",
-                    "content": "你是专业的文档结构分析助手,擅长识别章节和目录结构。请始终以JSON格式返回结果。"
+                    "content": "You are a professional document structure analysis assistant, skilled at identifying chapters and table of contents structure. Please always return results in JSON format."
                 },
                 {
                     "role": "user",
@@ -847,14 +847,14 @@ Please provide judgment for each candidate in JSON format:
                 }
             ]
 
-            # 确定实际使用的max_tokens
+            # Determine actual max_tokens to use
             actual_max_tokens = max_tokens or self.max_tokens
 
-            # 如果max_tokens > 5000,必须使用stream=True
+            # If max_tokens > 5000, must use stream=True
             use_streaming = actual_max_tokens > 5000
 
             if use_streaming:
-                # 使用流式调用
+                # Use streaming call
                 stream = self.client.chat.completions.create(
                     model=self.model,
                     messages=messages,
@@ -864,24 +864,24 @@ Please provide judgment for each candidate in JSON format:
                     stream=True
                 )
 
-                # 收集流式响应
+                # Collect streaming response
                 content = ""
                 for chunk in stream:
                     if chunk.choices[0].delta.content:
                         content += chunk.choices[0].delta.content
 
-                # 注意: 流式响应没有usage信息,使用估算值
-                # 粗略估算: 1 token ≈ 4 characters for Chinese, 1.3 for English
+                # Note: streaming response has no usage info, use estimated values
+                # Rough estimate: 1 token ≈ 4 characters for Chinese, 1.3 for English
                 estimated_prompt_tokens = len(prompt) // 3
                 estimated_completion_tokens = len(content) // 3
 
                 self.stats['total_input_tokens'] += estimated_prompt_tokens
                 self.stats['total_output_tokens'] += estimated_completion_tokens
 
-                logger.debug(f"LLM流式调用成功: ~{estimated_prompt_tokens} in + ~{estimated_completion_tokens} out tokens (估算)")
+                logger.debug(f"LLM streaming call successful: ~{estimated_prompt_tokens} in + ~{estimated_completion_tokens} out tokens (estimated)")
 
             else:
-                # 使用非流式调用
+                # Use non-streaming call
                 response = self.client.chat.completions.create(
                     model=self.model,
                     messages=messages,
@@ -890,18 +890,18 @@ Please provide judgment for each candidate in JSON format:
                     response_format={"type": "json_object"}
                 )
 
-                # 提取响应文本
+                # Extract response text
                 content = response.choices[0].message.content
 
-                # 更新统计
+                # Update statistics
                 usage = response.usage
                 self.stats['total_input_tokens'] += usage.prompt_tokens
                 self.stats['total_output_tokens'] += usage.completion_tokens
 
-                # 计算成本
+                # Calculate cost
                 model_key = self.model
                 if model_key not in self.pricing:
-                    # 尝试匹配前缀
+                    # Try matching prefix
                     for key in self.pricing:
                         if self.model.startswith(key):
                             model_key = key
@@ -913,16 +913,16 @@ Please provide judgment for each candidate in JSON format:
                     output_cost = usage.completion_tokens * pricing['output'] / 1000
                     self.stats['total_cost'] += input_cost + output_cost
 
-                logger.debug(f"LLM调用成功: {usage.prompt_tokens} in + {usage.completion_tokens} out tokens")
+                logger.debug(f"LLM call successful: {usage.prompt_tokens} in + {usage.completion_tokens} out tokens")
 
             return content
 
         except Exception as e:
-            logger.error(f"LLM调用失败: {e}")
+            logger.error(f"LLM call failed: {e}")
             raise
 
     def _parse_llm_response(self, response: str) -> List[LLMDecision]:
-        """解析LLM JSON响应"""
+        """Parse LLM JSON response"""
         try:
             data = json.loads(response)
             decisions = []
@@ -939,25 +939,25 @@ Please provide judgment for each candidate in JSON format:
             return decisions
 
         except json.JSONDecodeError as e:
-            logger.error(f"解析LLM响应失败: {e}")
-            logger.debug(f"响应内容: {response}")
+            logger.error(f"Failed to parse LLM response: {e}")
+            logger.debug(f"Response content: {response}")
             return []
 
     def _parse_structure_response(self, response: str) -> List[Dict]:
-        """解析结构推断响应"""
+        """Parse structure inference response"""
         try:
             data = json.loads(response)
             return data.get('suggested_chapters', [])
         except json.JSONDecodeError as e:
-            logger.error(f"解析结构响应失败: {e}")
+            logger.error(f"Failed to parse structure response: {e}")
             return []
 
     def get_stats(self) -> Dict:
-        """获取使用统计"""
+        """Get usage statistics"""
         return self.stats.copy()
 
     def reset_stats(self):
-        """重置统计"""
+        """Reset statistics"""
         self.stats = {
             'total_calls': 0,
             'total_input_tokens': 0,
@@ -966,93 +966,93 @@ Please provide judgment for each candidate in JSON format:
         }
 
 
-# ==================== 使用示例 ====================
+# ==================== Usage Examples ====================
 
 def example_usage():
-    """使用示例"""
+    """Usage examples"""
 
-    # 示例1: 基础使用
-    print("=== 示例1: 基础使用 ===")
+    # Example 1: Basic usage
+    print("=== Example 1: Basic Usage ===")
     assistant = LLMParserAssistant(
         api_key="your-api-key",
-        model="gpt-3.5-turbo"  # 使用经济模型
+        model="gpt-3.5-turbo"  # Use economical model
     )
 
-    # 创建测试候选
+    # Create test candidates
     candidates = [
         ChapterCandidate(
-            text="第一章 开始",
+            text="Chapter 1 Beginning",
             position=0,
             line_number=1,
             confidence=0.95,
             context_before="",
-            context_after="这是第一章的内容...",
+            context_after="This is the content of chapter 1...",
             pattern_type="standard"
         ),
         ChapterCandidate(
-            text="在第二章中",
+            text="In chapter 2",
             position=100,
             line_number=10,
             confidence=0.45,
-            context_before="如前所述,",
-            context_after="我们会详细讨论...",
+            context_before="As mentioned earlier,",
+            context_after="we will discuss in detail...",
             pattern_type="ambiguous",
-            issues=["疑似引用"]
+            issues=["Suspected reference"]
         )
     ]
 
-    # 分析候选章节
+    # Analyze chapter candidates
     decisions = assistant.analyze_chapter_candidates(
         candidates=candidates,
-        full_content="完整文本...",
+        full_content="Complete text...",
         existing_chapters=[],
         doc_context={'language': 'chinese'}
     )
 
     for i, decision in enumerate(decisions):
-        print(f"候选{i+1}: {decision.is_chapter}, 置信度: {decision.confidence}")
-        print(f"  理由: {decision.reason}")
+        print(f"Candidate {i+1}: {decision.is_chapter}, confidence: {decision.confidence}")
+        print(f"  Reason: {decision.reason}")
 
-    # 查看统计
+    # View statistics
     stats = assistant.get_stats()
-    print(f"\n统计: {stats['total_calls']} 次调用, ${stats['total_cost']:.4f} 成本")
+    print(f"\nStatistics: {stats['total_calls']} calls, ${stats['total_cost']:.4f} cost")
 
-    # 示例2: 混合解析器
-    print("\n=== 示例2: 混合解析器 ===")
+    # Example 2: Hybrid parser
+    print("\n=== Example 2: Hybrid Parser ===")
     parser = HybridParser(
         llm_api_key="your-api-key",
         llm_model="gpt-3.5-turbo"
     )
 
     content = """
-第一章 开始
-这是第一章的内容。
+Chapter 1 Beginning
+This is the content of chapter 1.
 
-第二章 继续
-这是第二章的内容。
+Chapter 2 Continuing
+This is the content of chapter 2.
 """
 
     volumes = parser.parse(content)
-    print(f"解析结果: {len(volumes)} 卷")
+    print(f"Parse result: {len(volumes)} volumes")
 
 
 class RuleBasedParserWithConfidence:
-    """带置信度评分的规则解析器"""
+    """Rule-based parser with confidence scoring"""
 
     def __init__(self, config=None):
         """
-        初始化规则解析器
+        Initialize rule parser
 
-        :param config: ParserConfig实例
+        :param config: ParserConfig instance
         """
         from .parser_config import ParserConfig, DEFAULT_CONFIG
         self.config = config or DEFAULT_CONFIG
 
     def parse_with_confidence(self, content: str, skip_toc_removal: bool = False, context=None, resume_state=None) -> Dict:
         """
-        解析内容并返回置信度
+        Parse content and return confidence
 
-        :param content: 文本内容
+        :param content: Text content
         :param skip_toc_removal: If True, skip TOC removal (useful when content already processed)
         :param context: Context for progress reporting
         :param resume_state: Resume state for checkpoint resume
@@ -1065,19 +1065,19 @@ class RuleBasedParserWithConfidence:
         """
         from .parser import parse_hierarchical_content, detect_language
 
-        # 使用现有解析器，传递 resume_state 参数
+        # Use existing parser, pass resume_state parameter
         volumes = parse_hierarchical_content(content, self.config, llm_assistant=None, skip_toc_removal=skip_toc_removal, context=context, resume_state=resume_state)
 
-        # 检测语言
+        # Detect language
         language = detect_language(content)
 
-        # 为每个章节计算置信度
+        # Calculate confidence for each chapter
         chapters_with_confidence = []
         uncertain_regions = []
 
         for volume in volumes:
             for chapter in volume.chapters:
-                # 计算置信度
+                # Calculate confidence
                 confidence = self._estimate_confidence(chapter, content, language)
 
                 chapter_info = {
@@ -1106,45 +1106,45 @@ class RuleBasedParserWithConfidence:
         }
 
     def _estimate_confidence(self, chapter, content: str, language: str) -> float:
-        """估算章节置信度"""
+        """Estimate chapter confidence"""
         import re
 
-        score = 0.6  # 基础分
+        score = 0.6  # Base score
 
-        # 因素1: 标题长度
+        # Factor 1: Title length
         title_len = len(chapter.title)
         if 5 <= title_len <= 30:
             score += 0.15
         elif title_len < 5 or title_len > 50:
             score -= 0.1
 
-        # 因素2: 内容长度
+        # Factor 2: Content length
         total_length = len(chapter.content) + sum(len(s.content) for s in chapter.sections)
         if 500 <= total_length <= 50000:
             score += 0.15
         elif total_length < 100:
             score -= 0.2
 
-        # 因素3: 标题格式
+        # Factor 3: Title format
         if language == 'chinese':
             if re.match(r'第[一二三四五六七八九十百千万\d]+章', chapter.title):
-                score += 0.1  # 标准格式
+                score += 0.1  # Standard format
         else:
             if re.match(r'Chapter\s+[\dIVXivx]+', chapter.title, re.IGNORECASE):
                 score += 0.1
 
-        # 因素4: 位置检查(简化)
+        # Factor 4: Position check (simplified)
         position = content.find(chapter.title)
         if position > 0:
             before = content[max(0, position-20):position]
             if re.search(r'[在如见]第', before):
-                score -= 0.3  # 疑似引用
+                score -= 0.3  # Suspected reference
 
         return max(0.0, min(1.0, score))
 
 
 class HybridParser:
-    """混合解析器: 规则 + LLM"""
+    """Hybrid parser: Rule-based + LLM"""
 
     def __init__(
         self,
@@ -1154,19 +1154,19 @@ class HybridParser:
         config = None
     ):
         """
-        初始化混合解析器
+        Initialize hybrid parser
 
-        :param llm_api_key: LLM API密钥
-        :param llm_base_url: LLM API基础URL
-        :param llm_model: 使用的模型
-        :param config: 解析器配置
+        :param llm_api_key: LLM API key
+        :param llm_base_url: LLM API base URL
+        :param llm_model: Model to use
+        :param config: Parser configuration
         """
         from .parser_config import ParserConfig, DEFAULT_CONFIG
 
         self.config = config or DEFAULT_CONFIG
         self.rule_parser = RuleBasedParserWithConfidence(self.config)
 
-        # 如果启用LLM辅助，初始化LLM助手
+        # If LLM assistance is enabled, initialize LLM assistant
         self.llm_assistant = None
         if self.config.enable_llm_assistance or llm_api_key:
             self.llm_assistant = LLMParserAssistant(
@@ -1177,75 +1177,75 @@ class HybridParser:
 
     def parse(self, content: str, skip_toc_removal: bool = False, context=None, resume_state=None):
         """
-        混合解析流程
+        Hybrid parsing workflow
 
-        :param content: 文本内容
+        :param content: Text content
         :param skip_toc_removal: If True, skip TOC removal (useful when content already processed)
         :param context: Context object for progress reporting
         :param resume_state: Resume state for checkpoint resume
-        :return: 卷列表
+        :return: List of volumes
         """
         from .parser import detect_language
 
-        # 阶段0: 使用LLM识别并移除目录页
+        # Stage 0: Use LLM to identify and remove table of contents page
         if self.llm_assistant:
-            logger.info("阶段0: LLM识别目录页...")
+            logger.info("Stage 0: LLM identifying table of contents page...")
 
-        # 阶段1: 规则解析 + 置信度评分（使用LLM助手辅助目录识别）
-        logger.info("阶段1: 规则解析...")
+        # Stage 1: Rule-based parsing + confidence scoring (with LLM assistant for TOC identification)
+        logger.info("Stage 1: Rule-based parsing...")
 
-        # 【修复】只调用一次规则解析，直接使用 parse_with_confidence 的结果
+        # 【Fix】Only call rule parsing once, directly use parse_with_confidence result
         rule_result = self.rule_parser.parse_with_confidence(content, skip_toc_removal=skip_toc_removal, context=context)
         volumes = rule_result['volumes']
         confidence = rule_result['overall_confidence']
         threshold = self.config.llm_confidence_threshold
-        logger.debug(f"规则解析置信度: {confidence:.2f}, 阈值: {threshold:.2f}")
+        logger.debug(f"Rule parsing confidence: {confidence:.2f}, threshold: {threshold:.2f}")
 
-        # 如果整体置信度高,直接返回
+        # If overall confidence is high, return directly
         if confidence >= threshold:
-            logger.info(f"高置信度 ({confidence:.2f} >= {threshold:.2f}), 跳过章节级LLM辅助")
-            logger.info(f"解析完成: {len(volumes)} 卷")
+            logger.info(f"High confidence ({confidence:.2f} >= {threshold:.2f}), skipping chapter-level LLM assistance")
+            logger.info(f"Parsing complete: {len(volumes)} volumes")
             return volumes
 
-        logger.info(f"置信度 < 阈值, 需要LLM辅助章节识别")
+        logger.info(f"Confidence < threshold, LLM assistance needed for chapter identification")
 
-        # 阶段2: 识别需要LLM的区域
+        # Stage 2: Identify regions requiring LLM
         uncertain_regions = rule_result.get('uncertain_regions', [])
         chapters = rule_result.get('chapters', [])
 
-        logger.debug(f"规则解析识别到 {len(chapters)} 个章节")
+        logger.debug(f"Rule parsing identified {len(chapters)} chapters")
 
         if uncertain_regions and self.llm_assistant:
-            logger.info(f"阶段2: LLM辅助处理 {len(uncertain_regions)} 个不确定区域...")
+            logger.info(f"Stage 2: LLM assisting with {len(uncertain_regions)} uncertain regions...")
 
-            # 转换为候选格式
+            # Convert to candidate format
             candidates = self._convert_to_candidates(uncertain_regions, content)
 
-            # LLM分析
+            # LLM analysis
             llm_decisions = self.llm_assistant.analyze_chapter_candidates(
                 candidates,
                 content,
                 rule_result['chapters'],
-                {'language': detect_language(content), 'doc_type': '小说'}
+                {'language': detect_language(content), 'doc_type': 'Novel'}
             )
 
-            logger.debug(f"LLM决策结果: 处理了 {len(llm_decisions)} 个候选")
+            logger.debug(f"LLM decision results: processed {len(llm_decisions)} candidates")
 
-            # 阶段3: 融合结果
-            logger.info("阶段3: 融合结果...")
+            # Stage 3: Merge results
+            logger.info("Stage 3: Merging results...")
             final_volumes = self._merge_results(
                 volumes,
                 llm_decisions,
                 candidates
             )
 
-            # 输出统计
+            # Output statistics
             stats = self.llm_assistant.get_stats()
-            logger.info(f"LLM统计: {stats['total_calls']} 次调用, ${stats['total_cost']:.4f} 成本")
+            logger.info(f"LLM statistics: {stats['total_calls']} calls, ${stats['total_cost']:.4f} cost")
 
             return final_volumes
 
-        # 无需LLM或未提供客户端
+        # No LLM needed or client not provided
         return volumes
 
     def _convert_to_candidates(
@@ -1253,35 +1253,35 @@ class HybridParser:
         uncertain_regions: List[Dict],
         content: str
     ) -> List[ChapterCandidate]:
-        """转换为候选格式"""
+        """Convert to candidate format"""
         candidates = []
 
         for region in uncertain_regions:
             chapter = region['chapter']
             confidence = region['confidence']
 
-            # 查找在内容中的位置
+            # Find position in content
             position = content.find(chapter.title)
             if position == -1:
                 continue
 
-            # 提取上下文
+            # Extract context
             context_size = 200
             context_before = content[max(0, position-context_size):position]
             context_after = content[position+len(chapter.title):position+len(chapter.title)+context_size]
 
-            # 计算行号
+            # Calculate line number
             line_number = content[:position].count('\n') + 1
 
-            # 确定问题
+            # Determine issues
             issues = []
             if confidence < 0.5:
-                issues.append("极低置信度")
+                issues.append("Extremely low confidence")
             elif confidence < 0.7:
-                issues.append("低置信度")
+                issues.append("Low confidence")
 
             if "第" in chapter.title and ("在" in context_before[-10:] or "如" in context_before[-10:]):
-                issues.append("疑似引用")
+                issues.append("Suspected reference")
 
             candidates.append(ChapterCandidate(
                 text=chapter.title,
@@ -1302,16 +1302,16 @@ class HybridParser:
         llm_decisions: List[LLMDecision],
         candidates: List[ChapterCandidate]
     ):
-        """融合规则和LLM结果"""
+        """Merge rule-based and LLM results"""
         from .data_structures import Volume, Chapter
 
-        # 创建决策映射
+        # Create decision mapping
         decision_map = {
             candidates[i].text: llm_decisions[i]
             for i in range(min(len(candidates), len(llm_decisions)))
         }
 
-        # 处理每个卷
+        # Process each volume
         new_volumes = []
         for volume in rule_volumes:
             new_chapters = []
@@ -1321,9 +1321,9 @@ class HybridParser:
 
                 if decision:
                     if decision.is_chapter:
-                        # LLM确认为章节
+                        # LLM confirmed as chapter
                         if decision.suggested_title:
-                            # 使用建议的标题
+                            # Use suggested title
                             new_chapter = Chapter(
                                 title=decision.suggested_title,
                                 content=chapter.content,
@@ -1333,10 +1333,10 @@ class HybridParser:
                         else:
                             new_chapters.append(chapter)
                     else:
-                        # LLM拒绝,不添加
-                        logger.info(f"LLM拒绝章节: {chapter.title}")
+                        # LLM rejected, do not add
+                        logger.info(f"LLM rejected chapter: {chapter.title}")
                 else:
-                    # 无LLM决策,保留原结果
+                    # No LLM decision, keep original result
                     new_chapters.append(chapter)
 
             if new_chapters:
@@ -1348,7 +1348,7 @@ class HybridParser:
         return new_volumes
 
     def get_stats(self) -> Dict:
-        """获取LLM使用统计"""
+        """Get LLM usage statistics"""
         if self.llm_assistant:
             return self.llm_assistant.get_stats()
         return {
@@ -1360,6 +1360,6 @@ class HybridParser:
 
 
 if __name__ == "__main__":
-    # 运行示例(需要设置API密钥)
+    # Run examples (requires API key setup)
     # example_usage()
     pass

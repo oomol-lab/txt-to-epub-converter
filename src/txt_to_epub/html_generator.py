@@ -201,14 +201,14 @@ def create_chapter_page(chapter_title: str, chapter_content: str, file_name: str
 def create_section_page(section_title: str, section_content: str, file_name: str) -> epub.EpubHtml:
     """
     Create section page with modern design.
-    
+
     :param section_title: Section title
     :param section_content: Section content
     :param file_name: File name
     :return: EpubHtml object
     """
     section_page = epub.EpubHtml(title=section_title, file_name=file_name, lang='zh')
-    
+
     if section_title:
         section_page.content = f'''
         <!DOCTYPE html>
@@ -245,7 +245,7 @@ def create_section_page(section_title: str, section_content: str, file_name: str
         </body>
         </html>
         '''
-    
+
     return section_page
 
 

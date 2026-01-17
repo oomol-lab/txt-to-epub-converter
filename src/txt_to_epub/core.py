@@ -35,16 +35,16 @@ from .word_count_validator import validate_conversion_integrity
 # Configure logging
 logger = logging.getLogger(__name__)
 
-# 尝试导入LLM相关模块
+# Try to import LLM-related modules
 try:
     from .llm_parser_assistant import HybridParser
     LLM_AVAILABLE = True
 except ImportError as e:
     LLM_AVAILABLE = False
-    logger.warning(f"LLM辅助功能不可用: {e}")
+    logger.warning(f"LLM assistance feature unavailable: {e}")
 except Exception as e:
     LLM_AVAILABLE = False
-    logger.warning(f"LLM辅助功能加载失败: {e}")
+    logger.warning(f"LLM assistance feature failed to load: {e}")
 
 
 def _create_epub_book(title: str, author: str, cover_image: Optional[str] = None, language: str = 'zh') -> epub.EpubBook:
@@ -150,6 +150,7 @@ def txt_to_epub(txt_file: str, epub_file: str, title: str = 'My Book',
     :param config: Parser configuration (optional)
     :param show_progress: Show progress bar (optional, default True)
     :param context: OOMOL Context object for progress reporting (optional)
+    :param enable_resume: Enable checkpoint resume feature (optional, default False)
     """
     if config is None:
         config = DEFAULT_CONFIG
@@ -169,7 +170,7 @@ def txt_to_epub(txt_file: str, epub_file: str, title: str = 'My Book',
 
     logger.info(f"Starting conversion: {txt_file} -> {epub_file}")
 
-    # 初始化断点续传状态
+    # Initialize checkpoint resume state
     resume_state = None
     if enable_resume:
         from .resume_state import ResumeState, get_state_file_path
@@ -177,19 +178,19 @@ def txt_to_epub(txt_file: str, epub_file: str, title: str = 'My Book',
         state_file = get_state_file_path(txt_file, epub_dir)
         resume_state = ResumeState(state_file)
 
-        # 验证源文件是否改变
+        # Verify if source file has changed
         if resume_state.verify_source_file(txt_file):
-            logger.info(f"断点续传：从上次中断处继续 (已处理 {resume_state.get_processed_count()} 章)")
-            print(f">>> 断点续传已启用：已处理 {resume_state.get_processed_count()} 章")
+            logger.info(f"Resume: Continuing from last interruption (processed {resume_state.get_processed_count()} chapters)")
+            print(f">>> Resume enabled: {resume_state.get_processed_count()} chapters already processed")
         else:
-            logger.info("断点续传：源文件已改变或首次运行，重新开始")
-            print(">>> 断点续传：源文件已改变或首次运行，重新开始")
+            logger.info("Resume: Source file changed or first run, starting fresh")
+            print(">>> Resume: Source file changed or first run, starting fresh")
             resume_state.reset()
             resume_state.set_source_hash(txt_file)
 
     # Report initial progress (already at 0% from __init__.py)
     if context:
-        context.report_progress(1)  # 开始转换
+        context.report_progress(1)  # Start conversion
 
     # Disable progress bar if tqdm not available
     if not TQDM_AVAILABLE and show_progress:
@@ -197,17 +198,17 @@ def txt_to_epub(txt_file: str, epub_file: str, title: str = 'My Book',
         show_progress = False
 
     try:
-        with tqdm(total=5, desc="转换进度", disable=not show_progress, ncols=80) as pbar:
+        with tqdm(total=5, desc="Conversion Progress", disable=not show_progress, ncols=80) as pbar:
             # Step 1: Create EPUB book
-            pbar.set_description("创建EPUB文件")
+            pbar.set_description("Creating EPUB file")
             book = _create_epub_book(title, author, cover_image)
             pbar.update(1)
 
             if context:
-                context.report_progress(2)  # 创建EPUB完成
+                context.report_progress(2)  # EPUB creation completed
 
             # Step 2: Read and analyze text content
-            pbar.set_description("读取文本文件")
+            pbar.set_description("Reading text file")
             content = _read_txt_file(txt_file)
 
             # Verify content is not empty
@@ -219,10 +220,10 @@ def txt_to_epub(txt_file: str, epub_file: str, title: str = 'My Book',
             pbar.update(1)
 
             if context:
-                context.report_progress(5)  # 读取文件完成（生成目录之前 5%）
+                context.report_progress(5)  # File reading completed (before TOC generation 5%)
 
             # Step 3: Parse hierarchical content
-            pbar.set_description("解析文档结构")
+            pbar.set_description("Parsing document structure")
 
             logger.debug(f"Parser config: enable_llm={config.enable_llm_assistance}, LLM_AVAILABLE={LLM_AVAILABLE}")
 
@@ -246,9 +247,9 @@ def txt_to_epub(txt_file: str, epub_file: str, title: str = 'My Book',
             # Remove table of contents once
             content = remove_table_of_contents(content, language, llm_assistant, config)
 
-            # 使用混合解析器（如果启用LLM且可用）
+            # Use hybrid parser (if LLM is enabled and available)
             if config.enable_llm_assistance and LLM_AVAILABLE:
-                logger.info("使用混合解析器 (规则 + LLM)")
+                logger.info("Using hybrid parser (rules + LLM)")
                 try:
                     parser = HybridParser(
                         llm_api_key=config.llm_api_key,
@@ -258,27 +259,27 @@ def txt_to_epub(txt_file: str, epub_file: str, title: str = 'My Book',
                     )
                     # Skip TOC removal since we already did it
                     volumes = parser.parse(content, skip_toc_removal=True, context=context, resume_state=resume_state)
-                    logger.info(f"解析完成，生成了 {len(volumes)} 个卷")
+                    logger.info(f"Parsing completed, generated {len(volumes)} volumes")
 
-                    # 输出LLM统计信息
+                    # Output LLM statistics
                     llm_stats = parser.get_stats()
                     if llm_stats['total_calls'] > 0:
-                        logger.info(f"LLM统计: {llm_stats['total_calls']} 次调用, "
-                                  f"${llm_stats['total_cost']:.4f} 成本, "
+                        logger.info(f"LLM stats: {llm_stats['total_calls']} calls, "
+                                  f"${llm_stats['total_cost']:.4f} cost, "
                                   f"{llm_stats['total_input_tokens']} + {llm_stats['total_output_tokens']} tokens")
                 except Exception as e:
-                    logger.warning(f"混合解析器失败，降级到纯规则解析: {e}")
+                    logger.warning(f"Hybrid parser failed, falling back to rule-based parsing: {e}")
                     # Skip TOC removal since we already did it
-                    # 即使降级，也传递 llm_assistant 用于标题生成
+                    # Even when falling back, pass llm_assistant for title generation
                     volumes = parse_hierarchical_content(content, config, llm_assistant, skip_toc_removal=True, context=context, resume_state=resume_state)
             else:
-                # 使用传统规则解析
+                # Use traditional rule-based parsing
                 if config.enable_llm_assistance and not LLM_AVAILABLE:
-                    logger.warning("用户启用了智能分析,但LLM模块不可用,降级到纯规则解析")
+                    logger.warning("User enabled intelligent analysis, but LLM module is unavailable, falling back to rule-based parsing")
                 else:
-                    logger.info("使用传统规则解析")
+                    logger.info("Using traditional rule-based parsing")
                 # Skip TOC removal since we already did it
-                # 如果有 llm_assistant，也传递给规则解析器用于标题生成
+                # If llm_assistant is available, also pass it to rule-based parser for title generation
                 volumes = parse_hierarchical_content(content, config, llm_assistant, skip_toc_removal=True, context=context, resume_state=resume_state)
 
             # Validate parsing results
@@ -289,12 +290,12 @@ def txt_to_epub(txt_file: str, epub_file: str, title: str = 'My Book',
             logger.info(f"Parsing completed, generated {len(volumes)} volumes")
             pbar.update(1)
 
-            # 章节解析完成，上报 95% 进度
+            # Chapter parsing completed, report 95% progress
             if context:
                 context.report_progress(95)
 
             # Step 4: Add volumes, chapters and sections to book
-            pbar.set_description("生成EPUB文件")
+            pbar.set_description("Generating EPUB file")
 
             # Prepare watermark text from config
             watermark = config.watermark_text if config.enable_watermark else None
@@ -310,7 +311,7 @@ def txt_to_epub(txt_file: str, epub_file: str, title: str = 'My Book',
             # Track progress for context reporting (5% to 95% = 90% range)
             processed_chapters = 0
 
-            with tqdm(total=total_chapters, desc="  处理章节", disable=not show_progress,
+            with tqdm(total=total_chapters, desc="  Processing chapters", disable=not show_progress,
                      leave=False, ncols=80) as chapter_pbar:
                 for volume in volumes:
                     if volume.title:  # If has volume title
@@ -325,7 +326,7 @@ def txt_to_epub(txt_file: str, epub_file: str, title: str = 'My Book',
                         volume_chapters = []
 
                         for chapter in volume.chapters:
-                            chapter_pbar.set_description(f"  处理: {chapter.title[:20]}")
+                            chapter_pbar.set_description(f"  Processing: {chapter.title[:20]}")
                             if chapter.sections:  # Chapter has sections
                                 # Create chapter page
                                 chapter_file_name = f"chap_{chapter_counter}.xhtml"
@@ -371,7 +372,7 @@ def txt_to_epub(txt_file: str, epub_file: str, title: str = 'My Book',
                         volume_counter += 1
                     else:  # No volumes, add chapters directly
                         for chapter in volume.chapters:
-                            chapter_pbar.set_description(f"  处理: {chapter.title[:20]}")
+                            chapter_pbar.set_description(f"  Processing: {chapter.title[:20]}")
                             if chapter.sections:  # Chapter has sections
                                 # Create chapter page
                                 chapter_file_name = f"chap_{chapter_counter}.xhtml"
@@ -415,7 +416,7 @@ def txt_to_epub(txt_file: str, epub_file: str, title: str = 'My Book',
             pbar.update(1)
 
             # Step 5: Set book structure and write file
-            pbar.set_description("写入EPUB文件")
+            pbar.set_description("Writing EPUB file")
             # Set book structure
             book.toc = toc_structure
             book.add_item(epub.EpubNcx())
@@ -432,7 +433,7 @@ def txt_to_epub(txt_file: str, epub_file: str, title: str = 'My Book',
             _write_epub_file(epub_file, book)
             pbar.update(1)
 
-            # EPUB 文件写入完成，上报 100% 进度
+            # EPUB file writing completed, report 100% progress
             if context:
                 context.report_progress(100)
 
@@ -450,12 +451,12 @@ def txt_to_epub(txt_file: str, epub_file: str, title: str = 'My Book',
 
         logger.info(f"EPUB conversion completed: {epub_file}")
 
-        # 标记断点续传完成并清理状态文件
+        # Mark checkpoint resume as completed and clean up state file
         if resume_state:
-            resume_state.flush()  # 确保所有未保存的更改被保存
+            resume_state.flush()  # Ensure all unsaved changes are persisted
             resume_state.mark_completed()
             resume_state.cleanup()
-            logger.info("断点续传：转换完成，已清理状态文件")
+            logger.info("Resume: Conversion completed, state file cleaned up")
 
         return {
             "success": True,
