@@ -30,7 +30,7 @@ from .parser import parse_hierarchical_content
 from .parser_config import ParserConfig, DEFAULT_CONFIG
 from .css import add_css_style
 from .html_generator import create_volume_page, create_chapter_page, create_section_page, create_chapter
-from .word_count_validator import validate_conversion_integrity
+from .validator import validate_conversion_integrity
 
 # Configure logging
 logger = logging.getLogger(__name__)

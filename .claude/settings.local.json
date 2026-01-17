@@ -4,7 +4,8 @@
       "Bash(python3 -m pytest:*)",
       "Bash(python3:*)",
       "Bash(tree:*)",
-      "Bash(find:*)"
+      "Bash(find:*)",
+      "Bash(wc:*)"
     ]
   }
 }
