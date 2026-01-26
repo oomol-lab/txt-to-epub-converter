@@ -23,6 +23,20 @@ def is_valid_chapter_title(match, content: str, language: str = 'chinese') -> bo
     match_start = match.start()
     match_end = match.end()
 
+    # 0. Enhanced: Check if in TOC region (first 15% of file with short content)
+    # This is a strong indicator of TOC entries
+    file_position_ratio = match_start / len(content) if len(content) > 0 else 0
+    if file_position_ratio < 0.15:  # In first 15% of file
+        # Check if next chapter is very close (TOC pattern)
+        # Use proper chapter pattern instead of just "第"
+        next_chapter_match = re.search(r'第[一二三四五六七八九十百千万壹贰叁肆伍陆柒捌玖拾佰仟萬\d]{1,4}章',
+                                      content[match_end:match_end + 200])
+        if next_chapter_match:
+            distance = next_chapter_match.start()
+            if distance < 150:  # Next chapter within 150 chars
+                logger.debug(f"Rejected chapter title (TOC region, next chapter at {distance} chars): {match_text}")
+                return False
+
     # 1. Check if title is too long (likely not a real chapter title)
     if len(match_text) > 100:
         logger.debug(f"Rejected chapter title (too long): {match_text[:50]}...")
@@ -50,7 +64,7 @@ def is_valid_chapter_title(match, content: str, language: str = 'chinese') -> bo
             return False
 
     # 3. Check context after the match
-    context_after_end = min(len(content), match_end + 150)
+    context_after_end = min(len(content), match_end + 300)  # Increased from 150 to 300
     context_after = content[match_end:context_after_end]
 
     if language == 'chinese':
@@ -65,9 +79,17 @@ def is_valid_chapter_title(match, content: str, language: str = 'chinese') -> bo
             return False
 
         # Enhanced: Check if followed immediately by another chapter title (likely TOC)
-        # Look for another chapter pattern within 20 chars
-        if re.search(r'^\s{0,10}第.{1,8}章', context_after[:20]):
+        # Look for another chapter pattern within 100 chars (increased from 20)
+        if re.search(r'^\s{0,50}.{0,50}第.{1,8}章', context_after[:100]):
             logger.debug(f"Rejected chapter title (consecutive titles, likely TOC): {match_text}")
+            return False
+
+        # Additional check: Count chapter titles in next 300 chars
+        # If 2+ chapters found, likely TOC
+        chapter_pattern = r'第[一二三四五六七八九十百千万壹贰叁肆伍陆柒捌玖拾佰仟萬\d]{1,4}章'
+        chapters_nearby = re.findall(chapter_pattern, context_after[:300])
+        if len(chapters_nearby) >= 2:
+            logger.debug(f"Rejected chapter title (high density {len(chapters_nearby)} chapters in 300 chars, likely TOC): {match_text}")
             return False
     else:
         # English: check for continuation like "ends", "of the book"

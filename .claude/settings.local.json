@@ -5,7 +5,11 @@
       "Bash(python3:*)",
       "Bash(tree:*)",
       "Bash(find:*)",
-      "Bash(wc:*)"
+      "Bash(wc:*)",
+      "Bash(unzip:*)",
+      "Bash(python debug_chapter_order.py:*)",
+      "Bash(ls:*)",
+      "Bash(done)"
     ]
   }
 }

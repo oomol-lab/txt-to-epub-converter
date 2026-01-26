@@ -84,6 +84,14 @@ def remove_table_of_contents(content: str, language: str = None, llm_assistant=N
             logger.info(f"Detected TOC title at line {i+1}: {stripped_line}")
             break
 
+        # Also check if the line contains TOC keywords with decorative characters
+        # Remove common decorative characters and check if the core text is a TOC keyword
+        core_text = re.sub(r'[—\-=_*#【】\[\]《》<>「」『』（）()\s]', '', stripped_line)
+        if core_text in toc_keywords or any(keyword == core_text for keyword in toc_keywords):
+            toc_start = i
+            logger.info(f"Detected decorated TOC title at line {i+1}: {stripped_line}")
+            break
+
     # Method 2: Detect dense chapter pattern region (TOC without explicit keyword)
     if toc_start == -1:
         # Scan for regions with abnormally high density of chapter-like patterns
@@ -223,6 +231,52 @@ def remove_table_of_contents(content: str, language: str = None, llm_assistant=N
                         if not is_chapter or is_preface:
                             toc_end = i
                             logger.info(f"TOC ends at line {toc_end+1} (empty line followed by main content)")
+                            break
+                    # Check for multiple consecutive content lines (indicates chapter body, not TOC)
+                    elif len(next_line) > 15:
+                        # Count consecutive non-empty, non-chapter lines following
+                        consecutive_content_lines = 0
+                        for k in range(next_content_idx, min(next_content_idx + 5, len(lines))):
+                            check_line = lines[k].strip()
+                            if check_line and len(check_line) > 15:
+                                # Not a chapter title
+                                is_ch = any(p.search(check_line) for p in chapter_patterns)
+                                if not is_ch:
+                                    consecutive_content_lines += 1
+                                else:
+                                    break
+                            elif not check_line:
+                                continue  # Skip empty lines
+                            else:
+                                break
+
+                        # If we have 2+ consecutive content lines, it's likely chapter body
+                        if consecutive_content_lines >= 2:
+                            # Back up to find the chapter title line before content
+                            # Look backward from current position to find where chapter title starts
+                            chapter_title_line = -1
+                            for back_idx in range(i, max(i - 5, toc_start), -1):
+                                back_line = lines[back_idx].strip()
+                                if back_line and any(p.search(back_line) for p in chapter_patterns):
+                                    chapter_title_line = back_idx
+                                    break
+
+                            # End TOC before the chapter title (not after)
+                            if chapter_title_line != -1:
+                                # Find last non-empty line before chapter title
+                                for end_idx in range(chapter_title_line - 1, max(toc_start, chapter_title_line - 10), -1):
+                                    if lines[end_idx].strip():
+                                        toc_end = end_idx
+                                        logger.info(f"TOC ends at line {toc_end+1} (before chapter title at line {chapter_title_line+1} with {consecutive_content_lines} content lines)")
+                                        break
+                                else:
+                                    # No non-empty line found, use line before chapter title
+                                    toc_end = chapter_title_line - 1
+                                    logger.info(f"TOC ends at line {toc_end+1} (directly before chapter title)")
+                            else:
+                                # No chapter title found, use original position
+                                toc_end = i
+                                logger.info(f"TOC ends at line {toc_end+1} (detected chapter body with {consecutive_content_lines} content lines)")
                             break
 
             # Safety: if scanned too far without finding end, limit TOC region

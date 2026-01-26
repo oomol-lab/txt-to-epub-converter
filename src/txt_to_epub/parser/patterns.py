@@ -8,7 +8,7 @@ class ChinesePatterns:
     """Regular expression patterns for Chinese books"""
 
     # Table of contents keywords
-    TOC_KEYWORDS = ["目录"]
+    TOC_KEYWORDS = ["目录", "章节目录", "目　录", "正文目录", "书籍目录", "小说目录"]
 
     # Preface keywords
     PREFACE_KEYWORDS = ["前言", "序", "序言"]
@@ -31,14 +31,16 @@ class ChinesePatterns:
             r'[ \t\r]*'
             r'(?:\d{1,4}[\.、])?'  # Optional numeric prefix: "001."
             r'[ \t]*'
-            r'[【\[]?'  # Optional decorative brackets
             r'(?:'
+                r'[【\[]?'  # Optional opening bracket
                 r'第([一二三四五六七八九十百千万壹贰叁肆伍陆柒捌玖拾佰仟萬]+|\d{1,3})章'
-                r'[】\]]?'  # Closing bracket right after chapter number
+                r'[】\]]?'  # Optional closing bracket after chapter number
                 r'(?:'
-                    r'(?:[ \t\u3000]+|：|:)?'  # Optional separator (made optional)
-                    r'[^\r\n，。！？；]{1,50}'  # Title content (at least 1 char)
-                    r'(?:[（\(][上中下前后][）\)])?'  # Optional part markers: (上)
+                    r'(?:[ \t\u3000]+|：|:)?'  # Optional separator
+                    r'(?:[【\[])?'  # Optional second bracket (for formats like: 第X章【标题】)
+                    r'[^\r\n【】\[\]]{1,50}'  # Title content (allow most punctuation including commas)
+                    r'(?:[】\]])?'  # Optional closing bracket for title
+                    r'(?:[（\(][^\r\n）\)]{0,20}[）\)])?'  # Optional any markers in parentheses
                 r')?'
                 r'|'
                 r'[【\[]?'  # Bracket for special chapter types
@@ -47,6 +49,7 @@ class ChinesePatterns:
                 r'(?:'
                     r'(?:[ \t\u3000]+|：|:)?'  # Optional separator
                     r'[^\r\n，。！？；]{1,50}'
+                    r'(?:[（\(][^\r\n）\)]{0,20}[）\)])?'  # Optional any markers
                 r')?'
             r')'
         r')'
