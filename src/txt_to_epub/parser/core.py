@@ -152,6 +152,8 @@ def parse_chapters_from_content(content: str, language: str = 'chinese', config:
     # Validate matches to filter out inline references (if enabled)
     if config.enable_chapter_validation:
         chapter_matches = [match for match in all_matches if is_valid_chapter_title(match, content, language)]
+        if len(all_matches) != len(chapter_matches):
+            logger.info(f"Filtered out {len(all_matches) - len(chapter_matches)} inline chapter references")
     else:
         chapter_matches = all_matches
 
@@ -187,10 +189,6 @@ def parse_chapters_from_content(content: str, language: str = 'chinese', config:
     for i, match in enumerate(chapter_matches):
         chapter_title = match.group(1).strip()
 
-        # Resume checkpoint: skip already processed chapters (using index)
-        if resume_state and resume_state.is_chapter_processed(i):
-            continue
-
         # Get chapter content (from end of current match to start of next match, or end of text)
         chapter_start = match.end()
         chapter_end = chapter_matches[i + 1].start() if i + 1 < len(chapter_matches) else len(content)
@@ -202,11 +200,12 @@ def parse_chapters_from_content(content: str, language: str = 'chinese', config:
                 'index': i,
                 'title': chapter_title,
                 'content': chapter_content,
-                'is_simple': is_simple_chapter_title(chapter_title, language)
+                'is_simple': is_simple_chapter_title(chapter_title, language),
+                'already_processed': resume_state and resume_state.is_chapter_processed(i)
             })
 
-            # Collect chapters that need enhancement
-            if is_simple_chapter_title(chapter_title, language):
+            # Collect chapters that need enhancement (skip already processed chapters)
+            if is_simple_chapter_title(chapter_title, language) and not (resume_state and resume_state.is_chapter_processed(i)):
                 # Extract chapter number
                 if language == 'chinese':
                     chapter_num_match = re.search(r'(第[一二三四五六七八九十百千万\d]+章)', chapter_title)
@@ -268,8 +267,8 @@ def parse_chapters_from_content(content: str, language: str = 'chinese', config:
                 enhanced_title = f"{chapter_number}: {enhanced_titles[i]}"
 
             final_title = enhanced_title
-        elif ch_data['is_simple'] and not llm_assistant:
-            # If no LLM, fall back to rule extraction
+        elif ch_data['is_simple'] and not llm_assistant and not ch_data.get('already_processed', False):
+            # If no LLM and chapter not already processed, fall back to rule extraction
             meaningful_title = extract_meaningful_title(chapter_content, language)
             if meaningful_title:
                 if language == 'chinese':
@@ -299,8 +298,8 @@ def parse_chapters_from_content(content: str, language: str = 'chinese', config:
                 chapter_content = empty_content
             chapter_list.append(Chapter(title=final_title, content=chapter_content, sections=[]))
 
-        # Resume checkpoint: mark chapter processed (using index)
-        if resume_state:
+        # Resume checkpoint: mark chapter processed (using index) - skip if already processed
+        if resume_state and not ch_data.get('already_processed', False):
             resume_state.mark_chapter_processed(i)
 
     return chapter_list
