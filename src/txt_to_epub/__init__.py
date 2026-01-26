@@ -5,7 +5,7 @@ A powerful Python library for converting plain text files (.txt) to professional
 with intelligent chapter detection and AI-enhanced structure analysis.
 """
 
-__version__ = "0.1.0"
+__version__ = "0.1.1"
 __author__ = "TXT to EPUB Converter Team"
 __license__ = "MIT"
 

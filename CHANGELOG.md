@@ -8,11 +8,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Planned
+
 - Add more unit tests
 - Support for additional chapter formats
 - Performance optimizations for large files
 - CLI tool for command-line usage
 - GUI application
+
+## [0.1.1] - 2025-01-26
+
+### Fixed
+
+- Enhanced chapter processing logic to properly filter out already processed chapters in resume mode
+- Improved inline chapter reference detection and filtering
+- Fixed issue where already processed chapters were being re-enhanced
+
+### Improved
+
+- Removed unnecessary logging and improved code clarity in core parser modules
+- Better handling of duplicate chapter titles with improved tracking
+- Optimized chapter validation and filtering logic
+
+### Enhancement
+
+- Comprehensive content integrity validation for TXT to EPUB conversion
+- Detailed validation report showing character count comparison before and after conversion
+- Enhanced logging for filtered inline chapter references
 
 ## [0.1.0] - 2025-01-16
 
