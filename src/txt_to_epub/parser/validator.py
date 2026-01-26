@@ -12,6 +12,7 @@ logger = logging.getLogger(__name__)
 def is_valid_chapter_title(match, content: str, language: str = 'chinese') -> bool:
     """
     Validate if a regex match is a genuine chapter title, not an inline reference.
+    Enhanced with better context checking to reduce false positives.
 
     :param match: Regex match object
     :param content: Full text content
@@ -49,7 +50,7 @@ def is_valid_chapter_title(match, content: str, language: str = 'chinese') -> bo
             return False
 
     # 3. Check context after the match
-    context_after_end = min(len(content), match_end + 50)
+    context_after_end = min(len(content), match_end + 150)
     context_after = content[match_end:context_after_end]
 
     if language == 'chinese':
@@ -62,10 +63,21 @@ def is_valid_chapter_title(match, content: str, language: str = 'chinese') -> bo
         if re.match(r'^\s*[，,]', context_after):
             logger.debug(f"Rejected chapter title (followed by comma): {match_text}")
             return False
+
+        # Enhanced: Check if followed immediately by another chapter title (likely TOC)
+        # Look for another chapter pattern within 20 chars
+        if re.search(r'^\s{0,10}第.{1,8}章', context_after[:20]):
+            logger.debug(f"Rejected chapter title (consecutive titles, likely TOC): {match_text}")
+            return False
     else:
         # English: check for continuation like "ends", "of the book"
         if re.match(r'^\s*(?:ends?|of|in|at)\s', context_after, re.IGNORECASE):
             logger.debug(f"Rejected chapter title (continuation): {match_text}")
+            return False
+
+        # Enhanced: Check if followed immediately by another chapter title (likely TOC)
+        if re.search(r'^\s{0,10}Chapter\s+[\dIVXivx]+', context_after[:30], re.IGNORECASE):
+            logger.debug(f"Rejected chapter title (consecutive titles, likely TOC): {match_text}")
             return False
 
     # 4. Check if the match is at the beginning of a line (real chapter titles usually are)
@@ -82,6 +94,28 @@ def is_valid_chapter_title(match, content: str, language: str = 'chinese') -> bo
         # This suggests it's not a standalone chapter title
         logger.debug(f"Rejected chapter title (not at line start): {match_text}")
         return False
+
+    # 5. Enhanced: Check if preceded by blank line(s) (true titles often have space before)
+    # Only check if not at the very beginning of the document
+    if match_start > 10:
+        context_before_extended = content[max(0, match_start - 30):match_start]
+        # Check if there's a blank line (double newline) before the title
+        # Real chapter titles usually have at least one blank line before them
+        if not re.search(r'\n\s*\n\s*$', context_before_extended) and match_start > 30:
+            # No blank line found, but allow exception for first chapter
+            # Check if there's substantial content before (more than 100 chars)
+            if match_start > 100:
+                logger.debug(f"Warning: Chapter title without preceding blank line: {match_text}")
+                # Don't reject, but this is a warning sign
+
+    # 6. Enhanced: Check if followed by actual content (not immediately another title or empty)
+    # Real chapter titles should have content after them
+    content_after_stripped = context_after.strip()
+    if content_after_stripped:
+        # Check if the content starts with actual text, not another structural element
+        first_line = content_after_stripped.split('\n')[0][:50]
+        if len(first_line) < 5:  # Very short first line might be problematic
+            logger.debug(f"Warning: Very short content after title: {match_text}")
 
     return True
 
