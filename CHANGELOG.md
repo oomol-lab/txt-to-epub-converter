@@ -15,6 +15,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - CLI tool for command-line usage
 - GUI application
 
+## [0.1.2] - 2025-01-27
+
+### Changed
+
+- Cleaned up development files and debug scripts from repository
+- Removed temporary debugging tools (debug_*.py scripts)
+- Removed development utility scripts (convert_qm_fixed.py, translate_comments.py)
+- Improved repository cleanliness for production release
+
 ## [0.1.1] - 2025-01-26
 
 ### Fixed

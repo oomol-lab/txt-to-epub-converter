@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "txt-to-epub-converter"
-version = "0.1.1"
+version = "0.1.2"
 description = "A powerful Python library for converting plain text files to professional EPUB eBooks with intelligent chapter detection"
 readme = "README.md"
 authors = [
