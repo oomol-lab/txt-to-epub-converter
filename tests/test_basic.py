@@ -28,7 +28,9 @@ def test_parser_config():
     # Test default config
     config = ParserConfig()
     assert config.enable_llm_assistance == False
-    assert config.llm_confidence_threshold == 0.5
+    assert config.llm_confidence_threshold == 0.7
+    assert config.enable_ai_metadata == False
+    assert config.enable_ai_cover == False
     
     # Test custom config
     config = ParserConfig(
@@ -66,7 +68,7 @@ def test_basic_conversion():
         assert result is not None
         assert 'output_file' in result
         assert os.path.exists(result['output_file'])
-        assert result['total_chars'] > 0
+        assert result['chapters_count'] > 0
         
     finally:
         # Cleanup

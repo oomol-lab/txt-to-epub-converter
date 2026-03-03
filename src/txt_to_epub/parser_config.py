@@ -158,6 +158,87 @@ class ParserConfig:
     This avoids unnecessary rule-based detection and improves efficiency.
     """
 
+    # ========== AI Book Metadata Configuration ==========
+
+    enable_ai_metadata: bool = False
+    """Whether to use AI to generate book metadata (title/description/tags)."""
+
+    ai_metadata_model: Optional[str] = None
+    """Model for metadata generation (fallback to llm_model when None)."""
+
+    ai_metadata_sample_chars: int = 12000
+    """Maximum character count sampled from source text for metadata generation."""
+
+    ai_metadata_max_tags: int = 8
+    """Maximum number of tags kept from AI metadata output."""
+
+    # ========== AI Cover Generation Configuration ==========
+
+    enable_ai_cover: bool = False
+    """Whether to generate a cover image using a text-to-image model."""
+
+    ai_cover_model: str = "google/gemini-2.5-flash-image"
+    """Image generation model name."""
+
+    ai_cover_size: str = "1024x1536"
+    """Cover generation size (recommended portrait ratio)."""
+
+    ai_cover_quality: str = "standard"
+    """Cover generation quality, depends on the provider."""
+
+    ai_cover_style_hint: Optional[str] = None
+    """Optional style hint passed to cover prompt."""
+
+    ai_cover_context_chars: int = 2000
+    """Character count sampled from the beginning of the book for cover context (minimum 1000)."""
+
+    # ========== AI Chapter Illustration Configuration ==========
+
+    enable_ai_illustrations: bool = False
+    """Whether to generate chapter illustrations using a text-to-image model."""
+
+    ai_illustration_model: Optional[str] = None
+    """Model for illustration generation (fallback to ai_cover_model when None)."""
+
+    ai_illustration_size: str = "1024x1024"
+    """Illustration image size."""
+
+    ai_illustration_quality: str = "standard"
+    """Illustration generation quality, depends on the provider."""
+
+    ai_illustration_style_hint: Optional[str] = None
+    """Optional style hint passed to illustration prompt."""
+
+    ai_illustration_context_chars: int = 1200
+    """Character count sampled from chapter content for illustration context (minimum 600)."""
+
+    ai_illustration_max_images_per_book: int = 8
+    """Maximum number of generated illustrations per book."""
+
+    ai_illustration_chapter_interval: int = 6
+    """Generate at most one illustration every N chapters."""
+
+    ai_illustration_min_chapter_chars: int = 2000
+    """Minimum chapter content length required for illustration generation."""
+
+    ai_illustration_position: str = "head"
+    """Illustration placement in chapter page: 'head' or 'tail'."""
+
+    enable_ai_illustration_continuity: bool = True
+    """Whether to enforce cross-chapter continuity for characters and style."""
+
+    ai_illustration_continuity_model: Optional[str] = None
+    """Model used to build continuity guide (fallback to llm_model when None)."""
+
+    ai_illustration_continuity_sample_chars: int = 16000
+    """Character count sampled from source text for continuity guide generation."""
+
+    ai_illustration_continuity_max_characters: int = 6
+    """Maximum number of persistent character profiles in continuity guide."""
+
+    ai_illustration_continuity_hint: Optional[str] = None
+    """Optional manual continuity hint (character appearance/style canon)."""
+
     # ========== TOC Detection Configuration ==========
 
     toc_detection_score_threshold: float = 30.0
@@ -253,7 +334,49 @@ class ParserConfig:
                 special_chapter_keywords=config_data.get('special_chapter_keywords', []),
                 language_hints=config_data.get('language_hints', {}),
                 debug_mode=config_data.get('debug_mode', False),
-                log_rejected_matches=config_data.get('log_rejected_matches', False)
+                log_rejected_matches=config_data.get('log_rejected_matches', False),
+                # LLM configuration
+                enable_llm_assistance=config_data.get('enable_llm_assistance', False),
+                llm_api_key=config_data.get('llm_api_key'),
+                llm_base_url=config_data.get('llm_base_url'),
+                llm_model=config_data.get('llm_model', 'deepseek-v3.2'),
+                llm_confidence_threshold=config_data.get('llm_confidence_threshold', 0.7),
+                llm_toc_detection_threshold=config_data.get('llm_toc_detection_threshold', 0.7),
+                llm_no_toc_threshold=config_data.get('llm_no_toc_threshold', 0.8),
+                # AI metadata configuration
+                enable_ai_metadata=config_data.get('enable_ai_metadata', False),
+                ai_metadata_model=config_data.get('ai_metadata_model'),
+                ai_metadata_sample_chars=config_data.get('ai_metadata_sample_chars', 12000),
+                ai_metadata_max_tags=config_data.get('ai_metadata_max_tags', 8),
+                # AI cover configuration
+                enable_ai_cover=config_data.get('enable_ai_cover', False),
+                ai_cover_model=config_data.get('ai_cover_model', 'google/gemini-2.5-flash-image'),
+                ai_cover_size=config_data.get('ai_cover_size', '1024x1536'),
+                ai_cover_quality=config_data.get('ai_cover_quality', 'standard'),
+                ai_cover_style_hint=config_data.get('ai_cover_style_hint'),
+                ai_cover_context_chars=config_data.get('ai_cover_context_chars', 2000),
+                # AI illustration configuration
+                enable_ai_illustrations=config_data.get('enable_ai_illustrations', False),
+                ai_illustration_model=config_data.get('ai_illustration_model'),
+                ai_illustration_size=config_data.get('ai_illustration_size', '1024x1024'),
+                ai_illustration_quality=config_data.get('ai_illustration_quality', 'standard'),
+                ai_illustration_style_hint=config_data.get('ai_illustration_style_hint'),
+                ai_illustration_context_chars=config_data.get('ai_illustration_context_chars', 1200),
+                ai_illustration_max_images_per_book=config_data.get('ai_illustration_max_images_per_book', 8),
+                ai_illustration_chapter_interval=config_data.get('ai_illustration_chapter_interval', 6),
+                ai_illustration_min_chapter_chars=config_data.get('ai_illustration_min_chapter_chars', 2000),
+                ai_illustration_position=config_data.get('ai_illustration_position', 'head'),
+                enable_ai_illustration_continuity=config_data.get('enable_ai_illustration_continuity', True),
+                ai_illustration_continuity_model=config_data.get('ai_illustration_continuity_model'),
+                ai_illustration_continuity_sample_chars=config_data.get('ai_illustration_continuity_sample_chars', 16000),
+                ai_illustration_continuity_max_characters=config_data.get('ai_illustration_continuity_max_characters', 6),
+                ai_illustration_continuity_hint=config_data.get('ai_illustration_continuity_hint'),
+                # TOC detection configuration
+                toc_detection_score_threshold=config_data.get('toc_detection_score_threshold', 30.0),
+                toc_max_scan_lines=config_data.get('toc_max_scan_lines', 300),
+                # HTML output configuration
+                enable_watermark=config_data.get('enable_watermark', True),
+                watermark_text=config_data.get('watermark_text', 'Powered by oomol.com, Please ensure that the copyright is in compliance')
             )
 
             logger.info(f"Loaded configuration from {yaml_path}")
@@ -293,6 +416,34 @@ class ParserConfig:
             llm_confidence_threshold=config_dict.get('llm_confidence_threshold', 0.7),
             llm_toc_detection_threshold=config_dict.get('llm_toc_detection_threshold', 0.7),
             llm_no_toc_threshold=config_dict.get('llm_no_toc_threshold', 0.8),
+            # AI metadata configuration
+            enable_ai_metadata=config_dict.get('enable_ai_metadata', False),
+            ai_metadata_model=config_dict.get('ai_metadata_model'),
+            ai_metadata_sample_chars=config_dict.get('ai_metadata_sample_chars', 12000),
+            ai_metadata_max_tags=config_dict.get('ai_metadata_max_tags', 8),
+            # AI cover configuration
+            enable_ai_cover=config_dict.get('enable_ai_cover', False),
+            ai_cover_model=config_dict.get('ai_cover_model', 'google/gemini-2.5-flash-image'),
+            ai_cover_size=config_dict.get('ai_cover_size', '1024x1536'),
+            ai_cover_quality=config_dict.get('ai_cover_quality', 'standard'),
+            ai_cover_style_hint=config_dict.get('ai_cover_style_hint'),
+            ai_cover_context_chars=config_dict.get('ai_cover_context_chars', 2000),
+            # AI illustration configuration
+            enable_ai_illustrations=config_dict.get('enable_ai_illustrations', False),
+            ai_illustration_model=config_dict.get('ai_illustration_model'),
+            ai_illustration_size=config_dict.get('ai_illustration_size', '1024x1024'),
+            ai_illustration_quality=config_dict.get('ai_illustration_quality', 'standard'),
+            ai_illustration_style_hint=config_dict.get('ai_illustration_style_hint'),
+            ai_illustration_context_chars=config_dict.get('ai_illustration_context_chars', 1200),
+            ai_illustration_max_images_per_book=config_dict.get('ai_illustration_max_images_per_book', 8),
+            ai_illustration_chapter_interval=config_dict.get('ai_illustration_chapter_interval', 6),
+            ai_illustration_min_chapter_chars=config_dict.get('ai_illustration_min_chapter_chars', 2000),
+            ai_illustration_position=config_dict.get('ai_illustration_position', 'head'),
+            enable_ai_illustration_continuity=config_dict.get('enable_ai_illustration_continuity', True),
+            ai_illustration_continuity_model=config_dict.get('ai_illustration_continuity_model'),
+            ai_illustration_continuity_sample_chars=config_dict.get('ai_illustration_continuity_sample_chars', 16000),
+            ai_illustration_continuity_max_characters=config_dict.get('ai_illustration_continuity_max_characters', 6),
+            ai_illustration_continuity_hint=config_dict.get('ai_illustration_continuity_hint'),
             # TOC detection configuration
             toc_detection_score_threshold=config_dict.get('toc_detection_score_threshold', 30.0),
             toc_max_scan_lines=config_dict.get('toc_max_scan_lines', 300),
@@ -329,6 +480,34 @@ class ParserConfig:
             'llm_confidence_threshold': self.llm_confidence_threshold,
             'llm_toc_detection_threshold': self.llm_toc_detection_threshold,
             'llm_no_toc_threshold': self.llm_no_toc_threshold,
+            # AI metadata configuration
+            'enable_ai_metadata': self.enable_ai_metadata,
+            'ai_metadata_model': self.ai_metadata_model,
+            'ai_metadata_sample_chars': self.ai_metadata_sample_chars,
+            'ai_metadata_max_tags': self.ai_metadata_max_tags,
+            # AI cover configuration
+            'enable_ai_cover': self.enable_ai_cover,
+            'ai_cover_model': self.ai_cover_model,
+            'ai_cover_size': self.ai_cover_size,
+            'ai_cover_quality': self.ai_cover_quality,
+            'ai_cover_style_hint': self.ai_cover_style_hint,
+            'ai_cover_context_chars': self.ai_cover_context_chars,
+            # AI illustration configuration
+            'enable_ai_illustrations': self.enable_ai_illustrations,
+            'ai_illustration_model': self.ai_illustration_model,
+            'ai_illustration_size': self.ai_illustration_size,
+            'ai_illustration_quality': self.ai_illustration_quality,
+            'ai_illustration_style_hint': self.ai_illustration_style_hint,
+            'ai_illustration_context_chars': self.ai_illustration_context_chars,
+            'ai_illustration_max_images_per_book': self.ai_illustration_max_images_per_book,
+            'ai_illustration_chapter_interval': self.ai_illustration_chapter_interval,
+            'ai_illustration_min_chapter_chars': self.ai_illustration_min_chapter_chars,
+            'ai_illustration_position': self.ai_illustration_position,
+            'enable_ai_illustration_continuity': self.enable_ai_illustration_continuity,
+            'ai_illustration_continuity_model': self.ai_illustration_continuity_model,
+            'ai_illustration_continuity_sample_chars': self.ai_illustration_continuity_sample_chars,
+            'ai_illustration_continuity_max_characters': self.ai_illustration_continuity_max_characters,
+            'ai_illustration_continuity_hint': self.ai_illustration_continuity_hint,
             # TOC detection configuration
             'toc_detection_score_threshold': self.toc_detection_score_threshold,
             'toc_max_scan_lines': self.toc_max_scan_lines,

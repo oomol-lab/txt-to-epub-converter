@@ -1,7 +1,8 @@
 import os
 import logging
+import json
 import chardet
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List, Tuple
 from ebooklib import epub
 
 # Try to import tqdm, make it optional
@@ -25,7 +26,7 @@ except ImportError:
         def __exit__(self, *args):
             pass
 
-from .data_structures import Volume
+from .data_structures import Volume, Chapter
 from .parser import parse_hierarchical_content
 from .parser_config import ParserConfig, DEFAULT_CONFIG
 from .css import add_css_style
@@ -47,12 +48,22 @@ except Exception as e:
     logger.warning(f"LLM assistance feature failed to load: {e}")
 
 
-def _create_epub_book(title: str, author: str, cover_image: Optional[str] = None, language: str = 'zh') -> epub.EpubBook:
+def _create_epub_book(
+    title: str,
+    author: str,
+    cover_image: Optional[str] = None,
+    language: str = 'zh',
+    metadata: Optional[Dict[str, Any]] = None
+) -> epub.EpubBook:
     """Create a new EPUB book and set metadata."""
     book = epub.EpubBook()
     book.set_title(title)
     book.set_language(language)
-    book.add_author(author)
+    if author:
+        book.add_author(author)
+
+    if metadata:
+        _apply_epub_metadata(book, metadata)
 
     if cover_image:
         _set_cover_image(book, cover_image)
@@ -64,9 +75,562 @@ def _set_cover_image(book: epub.EpubBook, cover_image: str) -> None:
     """Set the cover image for the book."""
     try:
         with open(cover_image, 'rb') as cover_file:
-            book.set_cover('cover.png', cover_file.read())
+            data = cover_file.read()
+
+            cover_name = 'cover.png'
+            if data.startswith(b'\xff\xd8\xff'):
+                cover_name = 'cover.jpg'
+            elif data.startswith(b'RIFF') and b'WEBP' in data[:16]:
+                cover_name = 'cover.webp'
+
+            book.set_cover(cover_name, data)
     except IOError as e:
         logger.error(f"Unable to read cover image {cover_image}: {e}")
+
+
+def _apply_epub_metadata(book: epub.EpubBook, metadata: Dict[str, Any]) -> None:
+    """Apply extra metadata fields to the EPUB book."""
+    description = metadata.get('description')
+    if description:
+        book.add_metadata('DC', 'description', description)
+
+    publisher = metadata.get('publisher')
+    if publisher:
+        book.add_metadata('DC', 'publisher', publisher)
+
+    published_date = metadata.get('date')
+    if published_date:
+        book.add_metadata('DC', 'date', published_date)
+
+    subjects = metadata.get('subjects') or []
+    for subject in subjects:
+        if subject:
+            book.add_metadata('DC', 'subject', subject)
+
+    identifier = metadata.get('identifier')
+    if identifier:
+        book.set_identifier(identifier)
+
+
+def _normalize_subjects(raw_subjects: Any, max_tags: int = 8) -> List[str]:
+    """Normalize subjects to a clean list of unique strings."""
+    if isinstance(raw_subjects, str):
+        candidates = [s.strip() for s in raw_subjects.replace('，', ',').replace('、', ',').split(',') if s.strip()]
+    elif isinstance(raw_subjects, list):
+        candidates = [str(s).strip() for s in raw_subjects if str(s).strip()]
+    else:
+        return []
+
+    deduped = []
+    seen = set()
+    for item in candidates:
+        lowered = item.lower()
+        if lowered in seen:
+            continue
+        deduped.append(item[:40])
+        seen.add(lowered)
+        if len(deduped) >= max_tags:
+            break
+    return deduped
+
+
+def _resolve_book_metadata(
+    title: str,
+    author: str,
+    detected_language: str,
+    metadata_overrides: Optional[Dict[str, Any]],
+    ai_metadata: Optional[Dict[str, Any]],
+    max_tags: int = 8
+) -> Tuple[str, str, str, Dict[str, Any]]:
+    """Resolve final title/author/language and extra metadata payload."""
+    overrides = metadata_overrides or {}
+    generated = ai_metadata or {}
+
+    resolved_title = title
+    if not title or title == 'My Book':
+        resolved_title = overrides.get('title') or generated.get('title') or title or 'My Book'
+    else:
+        resolved_title = overrides.get('title') or title
+
+    resolved_author = author
+    if not author or author == 'Unknown':
+        resolved_author = overrides.get('author') or generated.get('author') or author or 'Unknown'
+    else:
+        resolved_author = overrides.get('author') or author
+
+    resolved_language = overrides.get('language') or generated.get('language')
+    if resolved_language not in {'zh', 'en'}:
+        resolved_language = 'zh' if detected_language == 'chinese' else 'en'
+
+    description = overrides.get('description') or generated.get('description') or ''
+    publisher = overrides.get('publisher') or generated.get('publisher') or ''
+    published_date = overrides.get('date') or generated.get('date') or ''
+    identifier = overrides.get('identifier') or generated.get('identifier') or ''
+    subjects = overrides.get('tags')
+    if subjects is None:
+        subjects = generated.get('tags', [])
+    subjects = _normalize_subjects(subjects, max_tags=max_tags)
+
+    metadata_payload = {
+        'description': description,
+        'publisher': publisher,
+        'date': published_date,
+        'identifier': identifier,
+        'subjects': subjects,
+    }
+    return resolved_title, resolved_author, resolved_language, metadata_payload
+
+
+def _generate_ai_book_metadata(
+    content: str,
+    language: str,
+    title_hint: str,
+    author_hint: str,
+    config: ParserConfig
+) -> Tuple[Dict[str, Any], bool, Dict[str, Any], List[str]]:
+    """Generate metadata using AI, returning metadata/generated/stats/warnings."""
+    warnings: List[str] = []
+    if not config.enable_ai_metadata:
+        return {}, False, {}, warnings
+
+    try:
+        from .ai import BookMetadataGenerator
+
+        generator = BookMetadataGenerator(
+            api_key=config.llm_api_key,
+            model=config.ai_metadata_model or config.llm_model,
+            base_url=config.llm_base_url,
+            max_sample_chars=config.ai_metadata_sample_chars,
+            max_tags=config.ai_metadata_max_tags,
+        )
+        result = generator.generate(
+            content=content,
+            language=language,
+            title_hint=title_hint if title_hint != 'My Book' else '',
+            author_hint=author_hint if author_hint != 'Unknown' else '',
+        )
+        stats = generator.get_stats()
+
+        if result.get('success'):
+            return result.get('metadata', {}), True, stats, warnings
+
+        warnings.append(f"AI metadata not applied: {result.get('reason', 'unknown_error')}")
+        return {}, False, stats, warnings
+
+    except Exception as e:
+        warnings.append(f"AI metadata generation failed: {e}")
+        logger.warning(warnings[-1])
+        return {}, False, {}, warnings
+
+
+def _merge_ai_usage(base: Dict[str, Any], extra: Dict[str, Any]) -> Dict[str, Any]:
+    """Merge numeric usage counters from two dictionaries."""
+    if not extra:
+        return base
+    if not base:
+        return dict(extra)
+
+    merged = dict(base)
+    for key, value in extra.items():
+        if isinstance(value, (int, float)) and isinstance(merged.get(key), (int, float)):
+            merged[key] = merged[key] + value
+        elif key not in merged:
+            merged[key] = value
+    return merged
+
+
+def _generate_ai_cover_image(
+    content: str,
+    language: str,
+    title: str,
+    author: str,
+    metadata_payload: Dict[str, Any],
+    config: ParserConfig,
+    cover_prompt_hint: str = "",
+    source_hint: str = ""
+) -> Tuple[Optional[str], bool, Dict[str, Any], List[str]]:
+    """Generate cover image using AI, returning cover_path/generated/stats/warnings."""
+    warnings: List[str] = []
+    if not config.enable_ai_cover:
+        return None, False, {}, warnings
+
+    try:
+        from .ai import CoverGenerator
+
+        context_chars = max(1000, int(getattr(config, 'ai_cover_context_chars', 2000)))
+
+        generator = CoverGenerator(
+            api_key=config.llm_api_key,
+            model=config.ai_cover_model,
+            base_url=config.llm_base_url,
+            size=config.ai_cover_size,
+            quality=config.ai_cover_quality
+        )
+
+        result = generator.generate_cover(
+            title=title,
+            author=author,
+            description=metadata_payload.get('description', ''),
+            tags=metadata_payload.get('subjects', []),
+            language=language,
+            style_hint=cover_prompt_hint or (config.ai_cover_style_hint or ''),
+            content_sample=content[:context_chars],
+            source_hint=source_hint
+        )
+        stats = generator.get_stats()
+
+        if result.get('success') and result.get('cover_path'):
+            return result.get('cover_path'), True, stats, warnings
+
+        warnings.append(f"AI cover not applied: {result.get('reason', 'unknown_error')}")
+        return None, False, stats, warnings
+    except Exception as e:
+        warnings.append(f"AI cover generation failed: {e}")
+        logger.warning(warnings[-1])
+        return None, False, {}, warnings
+
+
+def _extract_chapter_illustration_text(chapter: Chapter, max_chars: int = 4000) -> str:
+    """Build a compact text sample from chapter/section content for illustration prompts."""
+    chunks: List[str] = []
+    chapter_text = (chapter.content or "").strip()
+    if chapter_text:
+        chunks.append(chapter_text)
+
+    for section in chapter.sections[:3]:
+        section_text = (section.content or "").strip()
+        if not section_text:
+            continue
+        if section.title:
+            chunks.append(f"{section.title}\n{section_text}")
+        else:
+            chunks.append(section_text)
+
+    merged = "\n\n".join(chunks).strip()
+    if len(merged) <= max_chars:
+        return merged
+    return merged[:max_chars]
+
+
+def _should_generate_chapter_illustration(
+    chapter_index: int,
+    chapter_text: str,
+    generated_count: int,
+    config: ParserConfig
+) -> bool:
+    """Check whether the current chapter should generate an illustration."""
+    if not getattr(config, "enable_ai_illustrations", False):
+        return False
+
+    max_images = max(0, int(getattr(config, "ai_illustration_max_images_per_book", 0)))
+    if max_images <= 0 or generated_count >= max_images:
+        return False
+
+    interval = max(1, int(getattr(config, "ai_illustration_chapter_interval", 1)))
+    if (chapter_index - 1) % interval != 0:
+        return False
+
+    min_chars = max(0, int(getattr(config, "ai_illustration_min_chapter_chars", 0)))
+    if len((chapter_text or "").strip()) < min_chars:
+        return False
+
+    return True
+
+
+def _detect_image_format(image_bytes: bytes) -> Tuple[str, str]:
+    """Detect image extension/media type from magic header."""
+    if image_bytes.startswith(b"\xff\xd8\xff"):
+        return ".jpg", "image/jpeg"
+    if image_bytes.startswith(b"RIFF") and b"WEBP" in image_bytes[:16]:
+        return ".webp", "image/webp"
+    if image_bytes.startswith(b"GIF87a") or image_bytes.startswith(b"GIF89a"):
+        return ".gif", "image/gif"
+    return ".png", "image/png"
+
+
+def _create_epub_image_item(image_path: str, image_index: int, chapter_index: int) -> Tuple[epub.EpubItem, str]:
+    """Create EPUB image item and return (item, href)."""
+    with open(image_path, "rb") as image_file:
+        image_bytes = image_file.read()
+
+    ext, media_type = _detect_image_format(image_bytes)
+    file_name = f"images/illustration_{chapter_index}_{image_index}{ext}"
+    uid = f"illustration_{chapter_index}_{image_index}"
+    item = epub.EpubItem(uid=uid, file_name=file_name, media_type=media_type, content=image_bytes)
+    return item, file_name
+
+
+def _normalize_illustration_continuity_guide(guide: Dict[str, Any], max_characters: int = 6) -> Dict[str, Any]:
+    """Normalize continuity guide fields into a stable structure."""
+    raw = guide if isinstance(guide, dict) else {}
+
+    style_bible = str(raw.get("style_bible") or "").strip()[:400]
+    setting_bible = str(raw.get("setting_bible") or "").strip()[:400]
+
+    characters: List[Dict[str, str]] = []
+    raw_characters = raw.get("characters")
+    if isinstance(raw_characters, list):
+        for item in raw_characters:
+            if not isinstance(item, dict):
+                continue
+            name = str(item.get("name") or "").strip()[:60]
+            if not name:
+                continue
+            appearance = str(item.get("appearance") or "").strip()[:260]
+            identity = str(item.get("identity") or "").strip()[:120]
+            characters.append({
+                "name": name,
+                "appearance": appearance,
+                "identity": identity
+            })
+            if len(characters) >= max(1, max_characters):
+                break
+
+    negatives: List[str] = []
+    raw_negatives = raw.get("negative_constraints")
+    if isinstance(raw_negatives, list):
+        for item in raw_negatives:
+            text = str(item).strip()[:160]
+            if text:
+                negatives.append(text)
+            if len(negatives) >= 8:
+                break
+
+    return {
+        "style_bible": style_bible,
+        "setting_bible": setting_bible,
+        "characters": characters,
+        "negative_constraints": negatives,
+    }
+
+
+def _build_default_illustration_continuity_guide(
+    title: str,
+    metadata_payload: Dict[str, Any],
+    config: ParserConfig
+) -> Dict[str, Any]:
+    """Build a local fallback continuity guide without extra model calls."""
+    styles = [
+        getattr(config, "ai_illustration_style_hint", None),
+        getattr(config, "ai_cover_style_hint", None),
+        getattr(config, "ai_illustration_continuity_hint", None),
+    ]
+    style_bible = "; ".join([s.strip() for s in styles if isinstance(s, str) and s.strip()])
+    if not style_bible:
+        style_bible = "Maintain consistent color script, costume silhouette, and lens language across chapters."
+
+    tags = metadata_payload.get("subjects") or []
+    if isinstance(tags, list):
+        tags_text = ", ".join([str(tag).strip() for tag in tags if str(tag).strip()][:6])
+    else:
+        tags_text = ""
+    setting_bible = f"Book: {title}. Tags: {tags_text}".strip()
+    setting_bible = setting_bible[:400]
+
+    return {
+        "style_bible": style_bible[:400],
+        "setting_bible": setting_bible,
+        "characters": [],
+        "negative_constraints": [],
+    }
+
+
+def _generate_ai_illustration_continuity_guide(
+    content: str,
+    language: str,
+    title: str,
+    metadata_payload: Dict[str, Any],
+    config: ParserConfig,
+    source_hint: str = ""
+) -> Tuple[Dict[str, Any], bool, Dict[str, Any], List[str]]:
+    """Generate continuity guide for chapter illustrations."""
+    warnings: List[str] = []
+    if not getattr(config, "enable_ai_illustrations", False):
+        return {}, False, {}, warnings
+    if not getattr(config, "enable_ai_illustration_continuity", True):
+        return {}, False, {}, warnings
+
+    default_guide = _build_default_illustration_continuity_guide(
+        title=title,
+        metadata_payload=metadata_payload,
+        config=config
+    )
+    max_characters = max(1, int(getattr(config, "ai_illustration_continuity_max_characters", 6)))
+    sample_chars = max(4000, int(getattr(config, "ai_illustration_continuity_sample_chars", 16000)))
+    sample = (content or "")[:sample_chars]
+    if not sample.strip():
+        return default_guide, False, {}, warnings
+
+    api_key = getattr(config, "llm_api_key", None)
+    if not api_key:
+        return default_guide, False, {}, warnings
+
+    try:
+        from .llm.client import LLMClient
+
+        model_name = (
+            getattr(config, "ai_illustration_continuity_model", None)
+            or getattr(config, "ai_metadata_model", None)
+            or config.llm_model
+        )
+        client = LLMClient(
+            api_key=config.llm_api_key,
+            model=model_name,
+            base_url=config.llm_base_url
+        )
+        lang = "Chinese" if language == "chinese" else "English"
+        continuity_hint = str(getattr(config, "ai_illustration_continuity_hint", "") or "").strip()
+        description = str(metadata_payload.get("description") or "").strip()[:400]
+        tags = metadata_payload.get("subjects") or []
+        if isinstance(tags, list):
+            tags_text = ", ".join([str(tag).strip() for tag in tags if str(tag).strip()][:8])
+        else:
+            tags_text = ""
+
+        prompt = f"""Build a stable visual continuity guide for chapter illustrations.
+
+Language: {lang}
+Book title: {title}
+Source title hint: {source_hint or "N/A"}
+Book description: {description or "N/A"}
+Genre tags: {tags_text or "N/A"}
+Manual continuity hint: {continuity_hint or "N/A"}
+Character profile cap: {max_characters}
+
+Content sample:
+{sample}
+
+Return strict JSON only:
+{{
+  "style_bible": "string, <= 80 words",
+  "setting_bible": "string, <= 80 words",
+  "characters": [
+    {{
+      "name": "string",
+      "appearance": "stable visual appearance cues",
+      "identity": "short role description"
+    }}
+  ],
+  "negative_constraints": ["string"]
+}}
+"""
+        response = client.call(prompt, max_tokens=900, temperature=0.2)
+        raw = json.loads(response)
+        normalized = _normalize_illustration_continuity_guide(raw, max_characters=max_characters)
+        if not normalized.get("style_bible"):
+            normalized["style_bible"] = default_guide.get("style_bible", "")
+        if not normalized.get("setting_bible"):
+            normalized["setting_bible"] = default_guide.get("setting_bible", "")
+        stats = client.get_stats()
+        return normalized, True, stats, warnings
+    except Exception as e:
+        warnings.append(f"AI illustration continuity guide failed: {e}")
+        logger.warning(warnings[-1])
+        return default_guide, False, {}, warnings
+
+
+def _select_chapter_character_focus(
+    chapter_text: str,
+    continuity_guide: Dict[str, Any],
+    max_focus: int = 2
+) -> List[str]:
+    """Select likely character focus for current chapter from continuity guide."""
+    if not continuity_guide:
+        return []
+
+    characters = continuity_guide.get("characters")
+    if not isinstance(characters, list):
+        return []
+
+    text = (chapter_text or "").strip()
+    text_lower = text.lower()
+
+    matched: List[str] = []
+    for item in characters:
+        if not isinstance(item, dict):
+            continue
+        name = str(item.get("name") or "").strip()
+        if not name:
+            continue
+        if name in text or name.lower() in text_lower:
+            matched.append(name)
+        if len(matched) >= max_focus:
+            break
+
+    if matched:
+        return matched
+
+    fallback: List[str] = []
+    for item in characters:
+        if not isinstance(item, dict):
+            continue
+        name = str(item.get("name") or "").strip()
+        if not name:
+            continue
+        fallback.append(name)
+        if len(fallback) >= max_focus:
+            break
+    return fallback
+
+
+def _generate_ai_chapter_illustration(
+    chapter_title: str,
+    chapter_content: str,
+    language: str,
+    book_title: str,
+    metadata_payload: Dict[str, Any],
+    config: ParserConfig,
+    source_hint: str = "",
+    continuity_guide: Optional[Dict[str, Any]] = None,
+    character_focus: Optional[List[str]] = None,
+) -> Tuple[Optional[str], bool, Dict[str, Any], List[str]]:
+    """Generate chapter illustration using AI, returning image_path/generated/stats/warnings."""
+    warnings: List[str] = []
+    if not getattr(config, "enable_ai_illustrations", False):
+        return None, False, {}, warnings
+
+    try:
+        from .ai import IllustrationGenerator
+
+        context_chars = max(600, int(getattr(config, "ai_illustration_context_chars", 1200)))
+        model_name = getattr(config, "ai_illustration_model", None) or config.ai_cover_model
+        style_hint = (
+            getattr(config, "ai_illustration_style_hint", None)
+            or config.ai_cover_style_hint
+            or ""
+        )
+
+        generator = IllustrationGenerator(
+            api_key=config.llm_api_key,
+            model=model_name,
+            base_url=config.llm_base_url,
+            size=config.ai_illustration_size,
+            quality=config.ai_illustration_quality
+        )
+
+        result = generator.generate_illustration(
+            book_title=book_title,
+            chapter_title=chapter_title,
+            chapter_content=(chapter_content or "")[:context_chars],
+            description=metadata_payload.get("description", ""),
+            tags=metadata_payload.get("subjects", []),
+            language=language,
+            style_hint=style_hint,
+            source_hint=source_hint,
+            continuity_guide=continuity_guide or {},
+            character_focus=character_focus or []
+        )
+        stats = generator.get_stats()
+
+        if result.get("success") and result.get("image_path"):
+            return result.get("image_path"), True, stats, warnings
+
+        warnings.append(f"AI illustration not applied ({chapter_title}): {result.get('reason', 'unknown_error')}")
+        return None, False, stats, warnings
+    except Exception as e:
+        warnings.append(f"AI illustration generation failed ({chapter_title}): {e}")
+        logger.warning(warnings[-1])
+        return None, False, {}, warnings
 
 
 def _read_txt_file(txt_file: str) -> str:
@@ -134,7 +698,9 @@ def _write_epub_file(epub_file: str, book: epub.EpubBook) -> None:
 def txt_to_epub(txt_file: str, epub_file: str, title: str = 'My Book',
                 author: str = 'Unknown', cover_image: Optional[str] = None,
                 config: Optional[ParserConfig] = None, show_progress: bool = True,
-                context=None, enable_resume: bool = False) -> Dict[str, Any]:
+                context=None, enable_resume: bool = False,
+                metadata_overrides: Optional[Dict[str, Any]] = None,
+                cover_prompt_hint: str = "") -> Dict[str, Any]:
     """
     Convert text file to EPUB format e-book, supports Chinese content.
 
@@ -147,6 +713,8 @@ def txt_to_epub(txt_file: str, epub_file: str, title: str = 'My Book',
     :param show_progress: Show progress bar (optional, default True)
     :param context: OOMOL Context object for progress reporting (optional)
     :param enable_resume: Enable checkpoint resume feature (optional, default False)
+    :param metadata_overrides: Metadata override dictionary (optional)
+    :param cover_prompt_hint: Extra style/prompt hint for AI cover generation (optional)
     """
     if config is None:
         config = DEFAULT_CONFIG
@@ -189,17 +757,19 @@ def txt_to_epub(txt_file: str, epub_file: str, title: str = 'My Book',
         logger.warning("tqdm not installed, progress bar disabled")
         show_progress = False
 
+    ai_metadata_generated = False
+    ai_cover_generated = False
+    ai_illustrations_generated = 0
+    ai_illustration_continuity_generated = False
+    ai_usage: Dict[str, Any] = {}
+    ai_warnings: List[str] = []
+    generated_cover_path: Optional[str] = None
+    generated_illustration_paths: List[str] = []
+    illustration_continuity_guide: Dict[str, Any] = {}
+
     try:
         with tqdm(total=5, desc="Conversion Progress", disable=not show_progress, ncols=80) as pbar:
-            # Step 1: Create EPUB book
-            pbar.set_description("Creating EPUB file")
-            book = _create_epub_book(title, author, cover_image)
-            pbar.update(1)
-
-            if context:
-                context.report_progress(2)  # EPUB creation completed
-
-            # Step 2: Read and analyze text content
+            # Step 1: Read and analyze text content
             pbar.set_description("Reading text file")
             content = _read_txt_file(txt_file)
 
@@ -211,17 +781,66 @@ def txt_to_epub(txt_file: str, epub_file: str, title: str = 'My Book',
             pbar.update(1)
 
             if context:
-                context.report_progress(5)  # File reading completed (before TOC generation 5%)
+                context.report_progress(5)
+
+            # Step 2: Resolve book metadata and create EPUB object
+            pbar.set_description("Preparing metadata")
+            from .parser import detect_language
+            language = detect_language(content)
+
+            ai_metadata, ai_metadata_generated, ai_usage, warnings = _generate_ai_book_metadata(
+                content=content,
+                language=language,
+                title_hint=title,
+                author_hint=author,
+                config=config
+            )
+            ai_warnings.extend(warnings)
+
+            resolved_title, resolved_author, resolved_language, metadata_payload = _resolve_book_metadata(
+                title=title,
+                author=author,
+                detected_language=language,
+                metadata_overrides=metadata_overrides,
+                ai_metadata=ai_metadata,
+                max_tags=config.ai_metadata_max_tags
+            )
+
+            final_cover_image = cover_image
+            if not cover_image:
+                generated_cover_path, ai_cover_generated, cover_usage, cover_warnings = _generate_ai_cover_image(
+                    content=content,
+                    language=language,
+                    title=resolved_title,
+                    author=resolved_author,
+                    metadata_payload=metadata_payload,
+                    config=config,
+                    cover_prompt_hint=cover_prompt_hint,
+                    source_hint=os.path.splitext(os.path.basename(txt_file))[0]
+                )
+                ai_usage = _merge_ai_usage(ai_usage, cover_usage)
+                ai_warnings.extend(cover_warnings)
+                if generated_cover_path:
+                    final_cover_image = generated_cover_path
+
+            book = _create_epub_book(
+                title=resolved_title,
+                author=resolved_author,
+                cover_image=final_cover_image,
+                language=resolved_language,
+                metadata=metadata_payload
+            )
+
+            pbar.update(1)
+
+            if context:
+                context.report_progress(12)
 
             # Step 3: Parse hierarchical content
             pbar.set_description("Parsing document structure")
 
             # Preprocessing: Remove table of contents once before all parsing
-            from .parser import remove_table_of_contents, detect_language
-            language = detect_language(content)
-
-            # Update book language based on detected content language
-            book.set_language('zh' if language == 'chinese' else 'en')
+            from .parser import remove_table_of_contents
 
             # Create LLM assistant if needed for TOC detection
             llm_assistant = None
@@ -265,6 +884,19 @@ def txt_to_epub(txt_file: str, epub_file: str, title: str = 'My Book',
                 logger.error("Parsing failed, no volumes generated")
                 raise Exception("Document parsing failed, unable to generate EPUB")
 
+            illustration_continuity_guide, ai_illustration_continuity_generated, continuity_usage, continuity_warnings = (
+                _generate_ai_illustration_continuity_guide(
+                    content=content,
+                    language=language,
+                    title=resolved_title,
+                    metadata_payload=metadata_payload,
+                    config=config,
+                    source_hint=os.path.splitext(os.path.basename(txt_file))[0]
+                )
+            )
+            ai_usage = _merge_ai_usage(ai_usage, continuity_usage)
+            ai_warnings.extend(continuity_warnings)
+
             pbar.update(1)
 
             # Chapter parsing completed, report 95% progress
@@ -304,10 +936,64 @@ def txt_to_epub(txt_file: str, epub_file: str, title: str = 'My Book',
 
                         for chapter in volume.chapters:
                             chapter_pbar.set_description(f"  Processing: {chapter.title[:20]}")
+                            chapter_illustration_href = None
+                            chapter_sample_text = _extract_chapter_illustration_text(chapter)
+                            if _should_generate_chapter_illustration(
+                                chapter_index=chapter_counter,
+                                chapter_text=chapter_sample_text,
+                                generated_count=ai_illustrations_generated,
+                                config=config
+                            ):
+                                chapter_character_focus = _select_chapter_character_focus(
+                                    chapter_text=chapter_sample_text,
+                                    continuity_guide=illustration_continuity_guide
+                                )
+                                image_path, image_generated, image_usage, image_warnings = _generate_ai_chapter_illustration(
+                                    chapter_title=chapter.title,
+                                    chapter_content=chapter_sample_text,
+                                    language=language,
+                                    book_title=resolved_title,
+                                    metadata_payload=metadata_payload,
+                                    config=config,
+                                    source_hint=os.path.splitext(os.path.basename(txt_file))[0],
+                                    continuity_guide=illustration_continuity_guide,
+                                    character_focus=chapter_character_focus
+                                )
+                                ai_usage = _merge_ai_usage(ai_usage, image_usage)
+                                ai_warnings.extend(image_warnings)
+                                if image_generated and image_path:
+                                    try:
+                                        image_item, chapter_illustration_href = _create_epub_image_item(
+                                            image_path=image_path,
+                                            image_index=ai_illustrations_generated + 1,
+                                            chapter_index=chapter_counter
+                                        )
+                                        book.add_item(image_item)
+                                        ai_illustrations_generated += 1
+                                        generated_illustration_paths.append(image_path)
+                                    except Exception as image_error:
+                                        warning = f"AI illustration embedding failed ({chapter.title}): {image_error}"
+                                        ai_warnings.append(warning)
+                                        logger.warning(warning)
+                                        if os.path.exists(image_path):
+                                            try:
+                                                os.unlink(image_path)
+                                            except OSError:
+                                                pass
+
                             if chapter.sections:  # Chapter has sections
                                 # Create chapter page
                                 chapter_file_name = f"chap_{chapter_counter}.xhtml"
-                                chapter_page = create_chapter_page(chapter.title, chapter.content, chapter_file_name, len(chapter.sections), watermark)
+                                chapter_page = create_chapter_page(
+                                    chapter.title,
+                                    chapter.content,
+                                    chapter_file_name,
+                                    len(chapter.sections),
+                                    watermark,
+                                    illustration_href=chapter_illustration_href,
+                                    illustration_caption=None,
+                                    illustration_position=config.ai_illustration_position
+                                )
                                 book.add_item(chapter_page)
                                 chapter_items.append(chapter_page)
 
@@ -329,7 +1015,14 @@ def txt_to_epub(txt_file: str, epub_file: str, title: str = 'My Book',
                                 # Add chapter and its sections as nested structure
                                 volume_chapters.append((chapter_link, section_links))
                             else:  # Chapter has no sections, add chapter content directly
-                                chapter_page = create_chapter(chapter.title, chapter.content, f"chap_{chapter_counter}.xhtml")
+                                chapter_page = create_chapter(
+                                    chapter.title,
+                                    chapter.content,
+                                    f"chap_{chapter_counter}.xhtml",
+                                    illustration_href=chapter_illustration_href,
+                                    illustration_caption=None,
+                                    illustration_position=config.ai_illustration_position
+                                )
                                 book.add_item(chapter_page)
                                 chapter_items.append(chapter_page)
                                 # Chapter directly as volume sub-item (indented one level relative to volume)
@@ -350,10 +1043,64 @@ def txt_to_epub(txt_file: str, epub_file: str, title: str = 'My Book',
                     else:  # No volumes, add chapters directly
                         for chapter in volume.chapters:
                             chapter_pbar.set_description(f"  Processing: {chapter.title[:20]}")
+                            chapter_illustration_href = None
+                            chapter_sample_text = _extract_chapter_illustration_text(chapter)
+                            if _should_generate_chapter_illustration(
+                                chapter_index=chapter_counter,
+                                chapter_text=chapter_sample_text,
+                                generated_count=ai_illustrations_generated,
+                                config=config
+                            ):
+                                chapter_character_focus = _select_chapter_character_focus(
+                                    chapter_text=chapter_sample_text,
+                                    continuity_guide=illustration_continuity_guide
+                                )
+                                image_path, image_generated, image_usage, image_warnings = _generate_ai_chapter_illustration(
+                                    chapter_title=chapter.title,
+                                    chapter_content=chapter_sample_text,
+                                    language=language,
+                                    book_title=resolved_title,
+                                    metadata_payload=metadata_payload,
+                                    config=config,
+                                    source_hint=os.path.splitext(os.path.basename(txt_file))[0],
+                                    continuity_guide=illustration_continuity_guide,
+                                    character_focus=chapter_character_focus
+                                )
+                                ai_usage = _merge_ai_usage(ai_usage, image_usage)
+                                ai_warnings.extend(image_warnings)
+                                if image_generated and image_path:
+                                    try:
+                                        image_item, chapter_illustration_href = _create_epub_image_item(
+                                            image_path=image_path,
+                                            image_index=ai_illustrations_generated + 1,
+                                            chapter_index=chapter_counter
+                                        )
+                                        book.add_item(image_item)
+                                        ai_illustrations_generated += 1
+                                        generated_illustration_paths.append(image_path)
+                                    except Exception as image_error:
+                                        warning = f"AI illustration embedding failed ({chapter.title}): {image_error}"
+                                        ai_warnings.append(warning)
+                                        logger.warning(warning)
+                                        if os.path.exists(image_path):
+                                            try:
+                                                os.unlink(image_path)
+                                            except OSError:
+                                                pass
+
                             if chapter.sections:  # Chapter has sections
                                 # Create chapter page
                                 chapter_file_name = f"chap_{chapter_counter}.xhtml"
-                                chapter_page = create_chapter_page(chapter.title, chapter.content, chapter_file_name, len(chapter.sections), watermark)
+                                chapter_page = create_chapter_page(
+                                    chapter.title,
+                                    chapter.content,
+                                    chapter_file_name,
+                                    len(chapter.sections),
+                                    watermark,
+                                    illustration_href=chapter_illustration_href,
+                                    illustration_caption=None,
+                                    illustration_position=config.ai_illustration_position
+                                )
                                 book.add_item(chapter_page)
                                 chapter_items.append(chapter_page)
 
@@ -375,7 +1122,14 @@ def txt_to_epub(txt_file: str, epub_file: str, title: str = 'My Book',
                                 # Add chapter and its sections as nested structure
                                 toc_structure.append((chapter_link, section_links))
                             else:  # Chapter has no sections, add chapter content directly
-                                chapter_page = create_chapter(chapter.title, chapter.content, f"chap_{chapter_counter}.xhtml")
+                                chapter_page = create_chapter(
+                                    chapter.title,
+                                    chapter.content,
+                                    f"chap_{chapter_counter}.xhtml",
+                                    illustration_href=chapter_illustration_href,
+                                    illustration_caption=None,
+                                    illustration_position=config.ai_illustration_position
+                                )
                                 book.add_item(chapter_page)
                                 chapter_items.append(chapter_page)
                                 # Chapter as top-level item
@@ -435,9 +1189,27 @@ def txt_to_epub(txt_file: str, epub_file: str, title: str = 'My Book',
             "validation_passed": is_valid,
             "validation_report": validation_report,
             "volumes_count": len(volumes),
-            "chapters_count": sum(len(volume.chapters) for volume in volumes)
+            "chapters_count": sum(len(volume.chapters) for volume in volumes),
+            "ai_metadata_generated": ai_metadata_generated,
+            "ai_cover_generated": ai_cover_generated,
+            "ai_illustrations_generated": ai_illustrations_generated,
+            "ai_illustration_continuity_generated": ai_illustration_continuity_generated,
+            "ai_usage": ai_usage,
+            "ai_warnings": ai_warnings
         }
 
     except Exception as e:
         logger.error(f"Error occurred during conversion: {e}")
         raise Exception(f"EPUB conversion failed: {e}")
+    finally:
+        for image_path in generated_illustration_paths:
+            if image_path and os.path.exists(image_path):
+                try:
+                    os.unlink(image_path)
+                except OSError as cleanup_error:
+                    logger.warning(f"Failed to clean temporary AI illustration file {image_path}: {cleanup_error}")
+        if generated_cover_path and os.path.exists(generated_cover_path):
+            try:
+                os.unlink(generated_cover_path)
+            except OSError as cleanup_error:
+                logger.warning(f"Failed to clean temporary AI cover file {generated_cover_path}: {cleanup_error}")
