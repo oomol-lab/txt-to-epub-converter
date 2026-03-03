@@ -84,8 +84,8 @@ config = ParserConfig(
 
     # 启用 AI 辅助
     enable_llm_assistance=True,
-    llm_api_key="your-api-key",
-    llm_base_url="https://api.openai.com/v1",
+    llm_api_key="your-api-key",  # 建议去 https://console.oomol.com/ 获取
+    llm_base_url="https://llm.oomol.com/v1",
     llm_model="gpt-4o-mini",
 
     # 水印
@@ -185,8 +185,8 @@ for txt_file in txt_files:
 | `min_chapter_length` | int | 50 | 每章最少字符数 |
 | `max_chapter_length` | int | 100000 | 每章最多字符数 |
 | `enable_llm_assistance` | bool | False | 启用 AI 增强解析 |
-| `llm_api_key` | str | None | OpenAI 兼容 API 密钥 |
-| `llm_base_url` | str | OpenAI URL | API 基础 URL |
+| `llm_api_key` | str | None | API 密钥（建议从 https://console.oomol.com/ 获取） |
+| `llm_base_url` | str | `https://llm.oomol.com/v1` | API 基础 URL |
 | `llm_model` | str | "gpt-4o-mini" | 模型名称 |
 | `enable_watermark` | bool | False | 启用水印 |
 | `watermark_text` | str | None | 水印文本 |

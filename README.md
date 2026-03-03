@@ -84,8 +84,8 @@ config = ParserConfig(
 
     # Enable AI assistance
     enable_llm_assistance=True,
-    llm_api_key="your-api-key",
-    llm_base_url="https://api.openai.com/v1",
+    llm_api_key="your-api-key",  # Get key from https://console.oomol.com/
+    llm_base_url="https://llm.oomol.com/v1",
     llm_model="gpt-4o-mini",
 
     # Watermark
@@ -185,8 +185,8 @@ for txt_file in txt_files:
 | `min_chapter_length` | int | 50 | Minimum characters per chapter |
 | `max_chapter_length` | int | 100000 | Maximum characters per chapter |
 | `enable_llm_assistance` | bool | False | Enable AI-enhanced parsing |
-| `llm_api_key` | str | None | OpenAI-compatible API key |
-| `llm_base_url` | str | OpenAI URL | API base URL |
+| `llm_api_key` | str | None | API key (recommended from https://console.oomol.com/) |
+| `llm_base_url` | str | `https://llm.oomol.com/v1` | API base URL |
 | `llm_model` | str | "gpt-4o-mini" | Model name |
 | `enable_watermark` | bool | False | Enable watermark |
 | `watermark_text` | str | None | Watermark text |

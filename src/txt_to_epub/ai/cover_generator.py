@@ -6,6 +6,7 @@ import os
 import re
 import tempfile
 from typing import Any, Dict, Optional
+from urllib.parse import urlparse
 
 import requests
 
@@ -114,7 +115,12 @@ class CoverGenerator:
             return False
         if self.api_key.startswith("api-"):
             return True
-        if "oomol.com" in self.base_url:
+        if self.base_url:
+            parsed = urlparse(self.base_url if "://" in self.base_url else f"https://{self.base_url}")
+            host = (parsed.netloc or "").lower()
+            if host == "llm.oomol.com" or host.endswith(".oomol.com"):
+                return True
+        if "oomol.com" in self.base_url.lower():
             return True
         if self.model.startswith("google/"):
             return True

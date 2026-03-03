@@ -111,10 +111,10 @@ class ParserConfig:
     """Whether to enable LLM intelligent TOC recognition (default off)"""
 
     llm_api_key: Optional[str] = None
-    """LLM API key"""
+    """LLM API key (recommended to obtain from https://console.oomol.com/)."""
 
-    llm_base_url: Optional[str] = None
-    """LLM API address (optional, for compatibility with Baidu Qianfan and other services)"""
+    llm_base_url: Optional[str] = "https://llm.oomol.com/v1"
+    """LLM API address (default: https://llm.oomol.com/v1)."""
 
     llm_model: str = "deepseek-v3.2"
     """LLM model to use"""
@@ -338,7 +338,7 @@ class ParserConfig:
                 # LLM configuration
                 enable_llm_assistance=config_data.get('enable_llm_assistance', False),
                 llm_api_key=config_data.get('llm_api_key'),
-                llm_base_url=config_data.get('llm_base_url'),
+                llm_base_url=config_data.get('llm_base_url') or 'https://llm.oomol.com/v1',
                 llm_model=config_data.get('llm_model', 'deepseek-v3.2'),
                 llm_confidence_threshold=config_data.get('llm_confidence_threshold', 0.7),
                 llm_toc_detection_threshold=config_data.get('llm_toc_detection_threshold', 0.7),
@@ -411,7 +411,7 @@ class ParserConfig:
             # LLM configuration (simplified)
             enable_llm_assistance=config_dict.get('enable_llm_assistance', False),
             llm_api_key=config_dict.get('llm_api_key'),
-            llm_base_url=config_dict.get('llm_base_url'),
+            llm_base_url=config_dict.get('llm_base_url') or 'https://llm.oomol.com/v1',
             llm_model=config_dict.get('llm_model', 'deepseek-v3.2'),
             llm_confidence_threshold=config_dict.get('llm_confidence_threshold', 0.7),
             llm_toc_detection_threshold=config_dict.get('llm_toc_detection_threshold', 0.7),

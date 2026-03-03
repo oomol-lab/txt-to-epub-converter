@@ -29,6 +29,7 @@ def test_parser_config():
     config = ParserConfig()
     assert config.enable_llm_assistance == False
     assert config.llm_confidence_threshold == 0.7
+    assert config.llm_base_url == "https://llm.oomol.com/v1"
     assert config.enable_ai_metadata == False
     assert config.enable_ai_cover == False
     

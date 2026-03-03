@@ -103,3 +103,15 @@ def test_ai_cover_not_called_when_cover_image_provided(monkeypatch):
             os.unlink(epub_file)
         if os.path.exists(manual_cover):
             os.unlink(manual_cover)
+
+
+def test_cover_generator_prefers_fusion_for_llm_oomol_base_url():
+    from txt_to_epub.ai.cover_generator import CoverGenerator
+
+    generator = CoverGenerator(
+        api_key="sk-demo",
+        base_url="https://llm.oomol.com/",
+        model="custom-image-model"
+    )
+
+    assert generator._should_use_fusion_api() is True
