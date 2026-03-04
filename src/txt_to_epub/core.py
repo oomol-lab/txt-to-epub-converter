@@ -340,6 +340,18 @@ def _extract_chapter_illustration_text(chapter: Chapter, max_chars: int = 4000) 
     return merged[:max_chars]
 
 
+def _resolve_ai_illustration_policy(config: ParserConfig) -> Dict[str, int]:
+    """Resolve effective chapter-illustration policy, with compatibility fallback."""
+    resolver = getattr(config, "get_ai_illustration_policy", None)
+    if callable(resolver):
+        return resolver()
+    return {
+        "max_images_per_book": max(0, int(getattr(config, "ai_illustration_max_images_per_book", 0))),
+        "chapter_interval": max(1, int(getattr(config, "ai_illustration_chapter_interval", 1))),
+        "min_chapter_chars": max(0, int(getattr(config, "ai_illustration_min_chapter_chars", 0))),
+    }
+
+
 def _should_generate_chapter_illustration(
     chapter_index: int,
     chapter_text: str,
@@ -350,7 +362,8 @@ def _should_generate_chapter_illustration(
     if not getattr(config, "enable_ai_illustrations", False):
         return False
 
-    max_images = max(0, int(getattr(config, "ai_illustration_max_images_per_book", 0)))
+    policy = _resolve_ai_illustration_policy(config)
+    max_images = max(0, int(policy.get("max_images_per_book", 0)))
     if max_images <= 0 or generated_count >= max_images:
         return False
 
@@ -358,11 +371,11 @@ def _should_generate_chapter_illustration(
     if chapter_index == 1:
         return True
 
-    interval = max(1, int(getattr(config, "ai_illustration_chapter_interval", 1)))
+    interval = max(1, int(policy.get("chapter_interval", 1)))
     if (chapter_index - 1) % interval != 0:
         return False
 
-    min_chars = max(0, int(getattr(config, "ai_illustration_min_chapter_chars", 0)))
+    min_chars = max(0, int(policy.get("min_chapter_chars", 0)))
     if len((chapter_text or "").strip()) < min_chars:
         return False
 

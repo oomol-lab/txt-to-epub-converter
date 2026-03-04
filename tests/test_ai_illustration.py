@@ -212,3 +212,46 @@ def test_first_chapter_always_gets_illustration():
         generated_count=1,
         config=config
     ) is False
+
+
+def test_ai_illustration_density_preset_low():
+    from txt_to_epub import ParserConfig
+    from txt_to_epub.core import _should_generate_chapter_illustration
+
+    config = ParserConfig(
+        enable_ai_illustrations=True,
+        ai_illustration_density="低"
+    )
+
+    policy = config.get_ai_illustration_policy()
+    assert policy["max_images_per_book"] == 4
+    assert policy["chapter_interval"] == 10
+    assert policy["min_chapter_chars"] == 3500
+
+    # Chapter 2 fails because low density requires a long interval.
+    assert _should_generate_chapter_illustration(
+        chapter_index=2,
+        chapter_text="这是一段足够长的章节内容。" * 500,
+        generated_count=1,
+        config=config
+    ) is False
+
+    # Chapter 11 matches interval (1, 11, 21...) and should pass with enough content.
+    assert _should_generate_chapter_illustration(
+        chapter_index=11,
+        chapter_text="这是一段足够长的章节内容。" * 500,
+        generated_count=1,
+        config=config
+    ) is True
+
+
+def test_ai_illustration_density_alias_ultra():
+    from txt_to_epub import ParserConfig
+
+    config = ParserConfig(ai_illustration_density="ultra")
+    assert config.get_ai_illustration_density() == "超高"
+
+    policy = config.get_ai_illustration_policy()
+    assert policy["max_images_per_book"] == 24
+    assert policy["chapter_interval"] == 1
+    assert policy["min_chapter_chars"] == 600

@@ -4,7 +4,7 @@ Parser configuration module for customizing text parsing behavior.
 import os
 import re
 import logging
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional, Any, ClassVar
 from dataclasses import dataclass, field
 
 logger = logging.getLogger(__name__)
@@ -26,6 +26,29 @@ class ParserConfig:
     This class contains all configurable parsing parameters used to control
     chapter recognition, content validation, LLM assistance, TOC detection, and other features.
     """
+
+    _ILLUSTRATION_DENSITY_PRESETS: ClassVar[Dict[str, Dict[str, int]]] = {
+        "低": {"max_images_per_book": 4, "chapter_interval": 10, "min_chapter_chars": 3500},
+        "中": {"max_images_per_book": 8, "chapter_interval": 6, "min_chapter_chars": 2000},
+        "高": {"max_images_per_book": 12, "chapter_interval": 3, "min_chapter_chars": 1200},
+        "超高": {"max_images_per_book": 24, "chapter_interval": 1, "min_chapter_chars": 600},
+    }
+    _ILLUSTRATION_DENSITY_ALIASES: ClassVar[Dict[str, str]] = {
+        "低": "低",
+        "low": "低",
+        "中": "中",
+        "medium": "中",
+        "mid": "中",
+        "normal": "中",
+        "default": "中",
+        "高": "高",
+        "high": "高",
+        "超高": "超高",
+        "ultra": "超高",
+        "extreme": "超高",
+        "veryhigh": "超高",
+        "very_high": "超高",
+    }
 
     # ========== Content Length Threshold Configuration ==========
 
@@ -215,14 +238,17 @@ class ParserConfig:
     ai_illustration_context_chars: int = 1200
     """Character count sampled from chapter content for illustration context (minimum 600)."""
 
+    ai_illustration_density: Optional[str] = None
+    """Illustration density preset: 低 / 中 / 高 / 超高 (also accepts low/medium/high/ultra)."""
+
     ai_illustration_max_images_per_book: int = 8
-    """Maximum number of generated illustrations per book."""
+    """Legacy fine-grained option. Effective when ai_illustration_density is not set."""
 
     ai_illustration_chapter_interval: int = 6
-    """Generate at most one illustration every N chapters."""
+    """Legacy fine-grained option. Effective when ai_illustration_density is not set."""
 
     ai_illustration_min_chapter_chars: int = 2000
-    """Minimum chapter content length required for illustration generation."""
+    """Legacy fine-grained option. Effective when ai_illustration_density is not set."""
 
     ai_illustration_position: str = "head"
     """Illustration placement in chapter page: 'head' or 'tail'."""
@@ -299,6 +325,73 @@ class ParserConfig:
     Description: Customize watermark text. Set to empty string to hide watermark (requires enable_watermark=True).
     """
 
+    def __post_init__(self) -> None:
+        """
+        Normalize AI illustration density and map explicit preset to concrete thresholds.
+        """
+        if self.ai_illustration_density is None:
+            return
+
+        raw_density = str(self.ai_illustration_density).strip()
+        if not raw_density:
+            self.ai_illustration_density = None
+            return
+
+        normalized_density = self._normalize_illustration_density(raw_density)
+        if normalized_density is None:
+            logger.warning(
+                f"Unknown ai_illustration_density '{self.ai_illustration_density}', fallback to '中'"
+            )
+            normalized_density = "中"
+
+        self.ai_illustration_density = normalized_density
+        preset = self._ILLUSTRATION_DENSITY_PRESETS[normalized_density]
+        self.ai_illustration_max_images_per_book = preset["max_images_per_book"]
+        self.ai_illustration_chapter_interval = preset["chapter_interval"]
+        self.ai_illustration_min_chapter_chars = preset["min_chapter_chars"]
+
+    @classmethod
+    def _normalize_illustration_density(cls, density: str) -> Optional[str]:
+        raw = str(density).strip()
+        if not raw:
+            return None
+        if raw in cls._ILLUSTRATION_DENSITY_PRESETS:
+            return raw
+        key = raw.lower().replace("-", "_").replace(" ", "")
+        return cls._ILLUSTRATION_DENSITY_ALIASES.get(key)
+
+    def get_ai_illustration_density(self) -> str:
+        """
+        Return canonical density label (低/中/高/超高) for current effective settings.
+        """
+        if self.ai_illustration_density in self._ILLUSTRATION_DENSITY_PRESETS:
+            return self.ai_illustration_density
+
+        max_images = max(0, int(getattr(self, "ai_illustration_max_images_per_book", 0)))
+        interval = max(1, int(getattr(self, "ai_illustration_chapter_interval", 1)))
+        min_chars = max(0, int(getattr(self, "ai_illustration_min_chapter_chars", 0)))
+
+        if interval <= 1 or max_images >= 24 or min_chars <= 600:
+            return "超高"
+        if interval <= 3 or max_images >= 12 or min_chars <= 1200:
+            return "高"
+        if interval >= 10 or max_images <= 4 or min_chars >= 3500:
+            return "低"
+        return "中"
+
+    def get_ai_illustration_policy(self) -> Dict[str, int]:
+        """
+        Resolve effective illustration policy for runtime decision-making.
+        """
+        if self.ai_illustration_density in self._ILLUSTRATION_DENSITY_PRESETS:
+            return dict(self._ILLUSTRATION_DENSITY_PRESETS[self.ai_illustration_density])
+
+        return {
+            "max_images_per_book": max(0, int(getattr(self, "ai_illustration_max_images_per_book", 0))),
+            "chapter_interval": max(1, int(getattr(self, "ai_illustration_chapter_interval", 1))),
+            "min_chapter_chars": max(0, int(getattr(self, "ai_illustration_min_chapter_chars", 0))),
+        }
+
     @classmethod
     def from_yaml(cls, yaml_path: str) -> 'ParserConfig':
         """
@@ -366,6 +459,7 @@ class ParserConfig:
                 ai_illustration_quality=config_data.get('ai_illustration_quality', 'standard'),
                 ai_illustration_style_hint=config_data.get('ai_illustration_style_hint'),
                 ai_illustration_context_chars=config_data.get('ai_illustration_context_chars', 1200),
+                ai_illustration_density=config_data.get('ai_illustration_density'),
                 ai_illustration_max_images_per_book=config_data.get('ai_illustration_max_images_per_book', 8),
                 ai_illustration_chapter_interval=config_data.get('ai_illustration_chapter_interval', 6),
                 ai_illustration_min_chapter_chars=config_data.get('ai_illustration_min_chapter_chars', 2000),
@@ -440,6 +534,7 @@ class ParserConfig:
             ai_illustration_quality=config_dict.get('ai_illustration_quality', 'standard'),
             ai_illustration_style_hint=config_dict.get('ai_illustration_style_hint'),
             ai_illustration_context_chars=config_dict.get('ai_illustration_context_chars', 1200),
+            ai_illustration_density=config_dict.get('ai_illustration_density'),
             ai_illustration_max_images_per_book=config_dict.get('ai_illustration_max_images_per_book', 8),
             ai_illustration_chapter_interval=config_dict.get('ai_illustration_chapter_interval', 6),
             ai_illustration_min_chapter_chars=config_dict.get('ai_illustration_min_chapter_chars', 2000),
@@ -463,6 +558,7 @@ class ParserConfig:
 
         :return: Configuration dictionary
         """
+        illustration_policy = self.get_ai_illustration_policy()
         return {
             'min_chapter_length': self.min_chapter_length,
             'min_section_length': self.min_section_length,
@@ -505,9 +601,10 @@ class ParserConfig:
             'ai_illustration_quality': self.ai_illustration_quality,
             'ai_illustration_style_hint': self.ai_illustration_style_hint,
             'ai_illustration_context_chars': self.ai_illustration_context_chars,
-            'ai_illustration_max_images_per_book': self.ai_illustration_max_images_per_book,
-            'ai_illustration_chapter_interval': self.ai_illustration_chapter_interval,
-            'ai_illustration_min_chapter_chars': self.ai_illustration_min_chapter_chars,
+            'ai_illustration_density': self.get_ai_illustration_density(),
+            'ai_illustration_max_images_per_book': illustration_policy['max_images_per_book'],
+            'ai_illustration_chapter_interval': illustration_policy['chapter_interval'],
+            'ai_illustration_min_chapter_chars': illustration_policy['min_chapter_chars'],
             'ai_illustration_position': self.ai_illustration_position,
             'enable_ai_illustration_continuity': self.enable_ai_illustration_continuity,
             'ai_illustration_continuity_model': self.ai_illustration_continuity_model,
