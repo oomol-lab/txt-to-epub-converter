@@ -212,3 +212,54 @@ def test_cover_prompt_omits_placeholder_author_text():
     assert 'Author: Unknown' not in prompt
     assert 'Author: [omit]' in prompt
     assert 'Do not render any author name text on the cover.' in prompt
+
+
+def test_ai_cover_uses_ai_metadata_title_when_input_title_is_source_slug(monkeypatch):
+    from txt_to_epub import txt_to_epub, ParserConfig
+
+    captured = {'title': None, 'author': None, 'source_hint': None}
+    generated_cover_path = _create_png_file()
+
+    def fake_ai_metadata(*args, **kwargs):
+        return (
+            {
+                'title': '琼明神女录',
+                'author': '倒悬山剑气长存',
+                'description': '示例简介',
+                'tags': ['仙侠'],
+                'language': 'zh',
+            },
+            True,
+            {'total_calls': 1},
+            []
+        )
+
+    def fake_generate_ai_cover_image(*args, **kwargs):
+        captured['title'] = kwargs.get('title')
+        captured['author'] = kwargs.get('author')
+        captured['source_hint'] = kwargs.get('source_hint')
+        return generated_cover_path, True, {'total_calls': 1}, []
+
+    monkeypatch.setattr("txt_to_epub.core._generate_ai_book_metadata", fake_ai_metadata)
+    monkeypatch.setattr("txt_to_epub.core._generate_ai_cover_image", fake_generate_ai_cover_image)
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        txt_file = os.path.join(tmp_dir, "qm.txt")
+        epub_file = os.path.join(tmp_dir, "qm.epub")
+        with open(txt_file, 'w', encoding='utf-8') as f:
+            f.write("第一章 暮色之城\n\n城市在雨夜中逐步显露它的秘密。")
+
+        config = ParserConfig(enable_ai_cover=True, enable_ai_metadata=True)
+        result = txt_to_epub(
+            txt_file=txt_file,
+            epub_file=epub_file,
+            title='qm',
+            author='Unknown',
+            config=config,
+            show_progress=False
+        )
+
+        assert result['success'] is True
+        assert captured['title'] == '琼明神女录'
+        assert captured['author'] == '倒悬山剑气长存'
+        assert captured['source_hint'] == 'qm'

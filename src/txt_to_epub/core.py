@@ -236,12 +236,39 @@ def _is_probable_filename_title(title: Optional[str]) -> bool:
     return False
 
 
-def _normalize_title_hint_for_ai(title_hint: str) -> str:
+def _is_probable_source_slug(title: Optional[str]) -> bool:
+    """Detect short slug-like titles commonly derived from filenames."""
+    if title is None:
+        return False
+
+    text = str(title).strip()
+    if not text:
+        return False
+
+    if not re.fullmatch(r"[A-Za-z0-9._-]+", text):
+        return False
+
+    if len(text) <= 3:
+        return True
+
+    if len(text) <= 12 and re.search(r"[_\-.]", text):
+        return True
+
+    if len(text) <= 12 and re.search(r"\d", text) and not text.isdigit():
+        return True
+
+    return False
+
+
+def _normalize_title_hint_for_ai(title_hint: str, source_hint: Optional[str] = None) -> str:
     """Keep title hint only when it looks like a meaningful book title."""
     text = (title_hint or "").strip()
     if not text:
         return ""
     if _is_probable_filename_title(text):
+        return ""
+    source_text = (source_hint or "").strip()
+    if source_text and text == source_text and _is_probable_source_slug(text):
         return ""
     return text
 
@@ -262,6 +289,7 @@ def _resolve_book_metadata(
     detected_language: str,
     metadata_overrides: Optional[Dict[str, Any]],
     ai_metadata: Optional[Dict[str, Any]],
+    source_hint: Optional[str] = None,
     max_tags: int = 8
 ) -> Tuple[str, str, str, Dict[str, Any]]:
     """Resolve final title/author/language and extra metadata payload."""
@@ -269,7 +297,13 @@ def _resolve_book_metadata(
     generated = ai_metadata or {}
 
     input_title = (title or '').strip()
-    weak_title_hint = (not input_title) or _is_probable_filename_title(input_title)
+    source_text = (source_hint or '').strip()
+    source_slug_title = (
+        bool(input_title and source_text)
+        and input_title == source_text
+        and _is_probable_source_slug(input_title)
+    )
+    weak_title_hint = (not input_title) or _is_probable_filename_title(input_title) or source_slug_title
     if weak_title_hint:
         resolved_title = overrides.get('title') or generated.get('title') or input_title
     else:
@@ -312,7 +346,8 @@ def _generate_ai_book_metadata(
     language: str,
     title_hint: Optional[str],
     author_hint: Optional[str],
-    config: ParserConfig
+    config: ParserConfig,
+    source_hint: Optional[str] = None
 ) -> Tuple[Dict[str, Any], bool, Dict[str, Any], List[str]]:
     """Generate metadata using AI, returning metadata/generated/stats/warnings."""
     warnings: List[str] = []
@@ -332,7 +367,7 @@ def _generate_ai_book_metadata(
         result = generator.generate(
             content=content,
             language=language,
-            title_hint=_normalize_title_hint_for_ai(title_hint),
+            title_hint=_normalize_title_hint_for_ai(title_hint, source_hint=source_hint),
             author_hint=_normalize_author_hint_for_ai(author_hint),
         )
         stats = generator.get_stats()
@@ -933,6 +968,7 @@ def txt_to_epub(txt_file: str, epub_file: str, title: Optional[str] = None,
             # Step 1: Read and analyze text content
             pbar.set_description("Reading text file")
             content = _read_txt_file(txt_file)
+            source_title_hint = os.path.splitext(os.path.basename(txt_file))[0]
 
             # Verify content is not empty
             if not content or not content.strip():
@@ -954,7 +990,8 @@ def txt_to_epub(txt_file: str, epub_file: str, title: Optional[str] = None,
                 language=language,
                 title_hint=title,
                 author_hint=author,
-                config=config
+                config=config,
+                source_hint=source_title_hint
             )
             ai_warnings.extend(warnings)
 
@@ -964,6 +1001,7 @@ def txt_to_epub(txt_file: str, epub_file: str, title: Optional[str] = None,
                 detected_language=language,
                 metadata_overrides=metadata_overrides,
                 ai_metadata=ai_metadata,
+                source_hint=source_title_hint,
                 max_tags=config.ai_metadata_max_tags
             )
 
@@ -977,7 +1015,7 @@ def txt_to_epub(txt_file: str, epub_file: str, title: Optional[str] = None,
                     metadata_payload=metadata_payload,
                     config=config,
                     cover_prompt_hint=cover_prompt_hint,
-                    source_hint=os.path.splitext(os.path.basename(txt_file))[0]
+                    source_hint=source_title_hint
                 )
                 ai_usage = _merge_ai_usage(ai_usage, cover_usage)
                 ai_warnings.extend(cover_warnings)
@@ -1071,7 +1109,7 @@ def txt_to_epub(txt_file: str, epub_file: str, title: Optional[str] = None,
                     title=resolved_title,
                     metadata_payload=metadata_payload,
                     config=config,
-                    source_hint=os.path.splitext(os.path.basename(txt_file))[0]
+                    source_hint=source_title_hint
                 )
             )
             ai_usage = _merge_ai_usage(ai_usage, continuity_usage)
@@ -1137,7 +1175,7 @@ def txt_to_epub(txt_file: str, epub_file: str, title: Optional[str] = None,
                                     book_title=resolved_title,
                                     metadata_payload=metadata_payload,
                                     config=config,
-                                    source_hint=os.path.splitext(os.path.basename(txt_file))[0],
+                                    source_hint=source_title_hint,
                                     continuity_guide=illustration_continuity_guide,
                                     character_focus=chapter_character_focus
                                 )
@@ -1268,7 +1306,7 @@ def txt_to_epub(txt_file: str, epub_file: str, title: Optional[str] = None,
                                     book_title=resolved_title,
                                     metadata_payload=metadata_payload,
                                     config=config,
-                                    source_hint=os.path.splitext(os.path.basename(txt_file))[0],
+                                    source_hint=source_title_hint,
                                     continuity_guide=illustration_continuity_guide,
                                     character_focus=chapter_character_focus
                                 )

@@ -15,6 +15,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - CLI tool for command-line usage
 - GUI application
 
+## [0.2.4] - 2026-03-04
+
+### Fixed
+
+- Fixed AI metadata/cover handoff for source-slug titles (for example `qm` from `qm.txt`) so resolved cover title/author correctly prefer AI-detected metadata instead of filename-like placeholders
+- Unified `source_hint` propagation in conversion pipeline to keep metadata, cover, and illustration prompt context consistent
+
+### Tests
+
+- Added regression tests for source-slug title hint normalization and metadata resolution fallback behavior
+- Added integration-style regression test to assert AI cover receives AI-resolved title/author when input title equals a short source slug
+
 ## [0.2.3] - 2026-03-04
 
 ### Fixed
@@ -166,7 +178,8 @@ This library was extracted from the Oomol txt-to-epub task and refactored into a
 - Web service API
 - Docker container support
 
-[Unreleased]: https://github.com/yourusername/txt-to-epub-converter/compare/v0.2.3...HEAD
+[Unreleased]: https://github.com/yourusername/txt-to-epub-converter/compare/v0.2.4...HEAD
+[0.2.4]: https://github.com/yourusername/txt-to-epub-converter/compare/v0.2.3...v0.2.4
 [0.2.3]: https://github.com/yourusername/txt-to-epub-converter/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/yourusername/txt-to-epub-converter/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/yourusername/txt-to-epub-converter/compare/v0.2.0...v0.2.1

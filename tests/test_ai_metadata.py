@@ -176,6 +176,52 @@ def test_filename_like_title_hint_is_removed_before_ai_metadata(monkeypatch):
     assert captured["author_hint"] == ""
 
 
+def test_source_slug_title_hint_is_removed_before_ai_metadata(monkeypatch):
+    from txt_to_epub import ParserConfig
+    from txt_to_epub.core import _generate_ai_book_metadata
+
+    captured = {}
+
+    class FakeBookMetadataGenerator:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def generate(self, content, language="chinese", title_hint="", author_hint=""):
+            captured["title_hint"] = title_hint
+            captured["author_hint"] = author_hint
+            return {
+                "success": True,
+                "metadata": {
+                    "title": "琼明神女录",
+                    "author": "倒悬山剑气长存",
+                    "description": "",
+                    "tags": [],
+                    "publisher": "",
+                    "date": "",
+                    "identifier": "",
+                    "language": "zh",
+                },
+            }
+
+        def get_stats(self):
+            return {"total_calls": 1}
+
+    monkeypatch.setattr("txt_to_epub.ai.BookMetadataGenerator", FakeBookMetadataGenerator)
+
+    config = ParserConfig(enable_ai_metadata=True)
+    _generate_ai_book_metadata(
+        content="第一章 夜雨\n\n一段故事正文。",
+        language="chinese",
+        title_hint="qm",
+        author_hint="Unknown",
+        config=config,
+        source_hint="qm",
+    )
+
+    assert captured["title_hint"] == ""
+    assert captured["author_hint"] == ""
+
+
 def test_resolve_book_metadata_prefers_ai_title_for_filename_like_input_title():
     from txt_to_epub.core import _resolve_book_metadata
 
@@ -198,6 +244,31 @@ def test_resolve_book_metadata_prefers_ai_title_for_filename_like_input_title():
     assert resolved_author == "爱潜水的乌贼"
     assert resolved_language == "zh"
     assert metadata_payload["subjects"] == ["奇幻"]
+
+
+def test_resolve_book_metadata_prefers_ai_title_for_source_slug_input_title():
+    from txt_to_epub.core import _resolve_book_metadata
+
+    resolved_title, resolved_author, resolved_language, metadata_payload = _resolve_book_metadata(
+        title="qm",
+        author="Unknown",
+        detected_language="chinese",
+        metadata_overrides=None,
+        ai_metadata={
+            "title": "琼明神女录",
+            "author": "倒悬山剑气长存",
+            "language": "zh",
+            "description": "desc",
+            "tags": ["仙侠"],
+        },
+        source_hint="qm",
+        max_tags=8,
+    )
+
+    assert resolved_title == "琼明神女录"
+    assert resolved_author == "倒悬山剑气长存"
+    assert resolved_language == "zh"
+    assert metadata_payload["subjects"] == ["仙侠"]
 
 
 def test_resolve_book_metadata_uses_empty_title_when_no_hint_and_no_ai():
