@@ -15,6 +15,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - CLI tool for command-line usage
 - GUI application
 
+## [0.2.3] - 2026-03-04
+
+### Fixed
+
+- Eliminated transient progress flicker in multi-volume parsing by enforcing monotonic progress reporting at the conversion entrypoint
+- Added multi-volume regression test to guarantee progress never moves backward
+
 ## [0.2.2] - 2026-03-04
 
 ### Fixed
@@ -159,7 +166,8 @@ This library was extracted from the Oomol txt-to-epub task and refactored into a
 - Web service API
 - Docker container support
 
-[Unreleased]: https://github.com/yourusername/txt-to-epub-converter/compare/v0.2.2...HEAD
+[Unreleased]: https://github.com/yourusername/txt-to-epub-converter/compare/v0.2.3...HEAD
+[0.2.3]: https://github.com/yourusername/txt-to-epub-converter/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/yourusername/txt-to-epub-converter/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/yourusername/txt-to-epub-converter/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/yourusername/txt-to-epub-converter/compare/v0.1.4...v0.2.0

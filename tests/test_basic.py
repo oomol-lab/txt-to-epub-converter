@@ -131,5 +131,52 @@ def test_context_progress_is_monotonic():
             os.unlink(epub_file)
 
 
+def test_context_progress_is_monotonic_with_multiple_volumes():
+    """Test context progress remains monotonic when the parser processes multiple volumes."""
+    from txt_to_epub import txt_to_epub
+
+    class FakeContext:
+        def __init__(self):
+            self.values = []
+
+        def report_progress(self, value):
+            self.values.append(value)
+
+    context = FakeContext()
+
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False, encoding='utf-8') as f:
+        f.write("第一卷 起始卷\n")
+        f.write("第一章 开端\n\n这是第一卷第一章内容。\n\n")
+        f.write("第二章 波动\n\n这是第一卷第二章内容。\n\n")
+        f.write("第二卷 终局卷\n")
+        f.write("第三章 冲突\n\n这是第二卷第一章内容。\n\n")
+        f.write("第四章 尾声\n\n这是第二卷第二章内容。\n")
+        txt_file = f.name
+
+    with tempfile.NamedTemporaryFile(suffix='.epub', delete=False) as f:
+        epub_file = f.name
+
+    try:
+        result = txt_to_epub(
+            txt_file=txt_file,
+            epub_file=epub_file,
+            title="多卷测试书籍",
+            author="测试作者",
+            context=context,
+            show_progress=False,
+        )
+
+        assert result["success"] is True
+        assert context.values, "Expected progress to be reported"
+        assert context.values[0] == 1
+        assert context.values[-1] == 100
+        assert all(curr >= prev for prev, curr in zip(context.values, context.values[1:])), context.values
+    finally:
+        if os.path.exists(txt_file):
+            os.unlink(txt_file)
+        if os.path.exists(epub_file):
+            os.unlink(epub_file)
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

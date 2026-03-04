@@ -49,6 +49,22 @@ except Exception as e:
     logger.warning(f"LLM assistance feature failed to load: {e}")
 
 
+class _MonotonicProgressContext:
+    """Wrap a context object so reported progress never moves backward."""
+
+    def __init__(self, context):
+        self._context = context
+        self._last_progress = -1
+
+    def report_progress(self, value: int) -> None:
+        progress = max(0, min(100, int(value)))
+        if progress <= self._last_progress:
+            return
+
+        self._last_progress = progress
+        self._context.report_progress(progress)
+
+
 def _create_epub_book(
     title: str,
     author: str,
@@ -888,9 +904,11 @@ def txt_to_epub(txt_file: str, epub_file: str, title: Optional[str] = None,
             resume_state.reset()
             resume_state.set_source_hash(txt_file)
 
+    progress_context = _MonotonicProgressContext(context) if context else None
+
     # Report initial progress (already at 0% from __init__.py)
-    if context:
-        context.report_progress(1)  # Start conversion
+    if progress_context:
+        progress_context.report_progress(1)  # Start conversion
 
     # Disable progress bar if tqdm not available
     if not TQDM_AVAILABLE and show_progress:
@@ -923,8 +941,8 @@ def txt_to_epub(txt_file: str, epub_file: str, title: Optional[str] = None,
 
             pbar.update(1)
 
-            if context:
-                context.report_progress(5)
+            if progress_context:
+                progress_context.report_progress(5)
 
             # Step 2: Resolve book metadata and create EPUB object
             pbar.set_description("Preparing metadata")
@@ -976,8 +994,8 @@ def txt_to_epub(txt_file: str, epub_file: str, title: Optional[str] = None,
 
             pbar.update(1)
 
-            if context:
-                context.report_progress(12)
+            if progress_context:
+                progress_context.report_progress(12)
 
             # Step 3: Parse hierarchical content
             pbar.set_description("Parsing document structure")
@@ -1008,19 +1026,38 @@ def txt_to_epub(txt_file: str, epub_file: str, title: Optional[str] = None,
                         config=config
                     )
                     # Skip TOC removal since we already did it
-                    volumes = parser.parse(content, skip_toc_removal=True, context=context, resume_state=resume_state)
+                    volumes = parser.parse(
+                        content,
+                        skip_toc_removal=True,
+                        context=progress_context,
+                        resume_state=resume_state,
+                    )
                 except Exception as e:
                     logger.warning(f"Hybrid parser failed, falling back to rule-based parsing: {e}")
                     # Skip TOC removal since we already did it
                     # Even when falling back, pass llm_assistant for title generation
-                    volumes = parse_hierarchical_content(content, config, llm_assistant, skip_toc_removal=True, context=context, resume_state=resume_state)
+                    volumes = parse_hierarchical_content(
+                        content,
+                        config,
+                        llm_assistant,
+                        skip_toc_removal=True,
+                        context=progress_context,
+                        resume_state=resume_state,
+                    )
             else:
                 # Use traditional rule-based parsing
                 if config.enable_llm_assistance and not LLM_AVAILABLE:
                     logger.warning("User enabled intelligent analysis, but LLM module is unavailable, falling back to rule-based parsing")
                 # Skip TOC removal since we already did it
                 # If llm_assistant is available, also pass it to rule-based parser for title generation
-                volumes = parse_hierarchical_content(content, config, llm_assistant, skip_toc_removal=True, context=context, resume_state=resume_state)
+                volumes = parse_hierarchical_content(
+                    content,
+                    config,
+                    llm_assistant,
+                    skip_toc_removal=True,
+                    context=progress_context,
+                    resume_state=resume_state,
+                )
 
             # Validate parsing results
             if not volumes:
@@ -1043,8 +1080,8 @@ def txt_to_epub(txt_file: str, epub_file: str, title: Optional[str] = None,
             pbar.update(1)
 
             # Chapter parsing completed, report 95% progress
-            if context:
-                context.report_progress(95)
+            if progress_context:
+                progress_context.report_progress(95)
 
             # Step 4: Add volumes, chapters and sections to book
             pbar.set_description("Generating EPUB file")
@@ -1199,10 +1236,10 @@ def txt_to_epub(txt_file: str, epub_file: str, title: Optional[str] = None,
 
                             # Report progress to context during chapter assembly (95% to 99%)
                             processed_chapters += 1
-                            if context and total_chapters > 0:
+                            if progress_context and total_chapters > 0:
                                 progress = 95 + int((processed_chapters / total_chapters) * 4)
                                 progress = min(progress, 99)
-                                context.report_progress(progress)
+                                progress_context.report_progress(progress)
 
                         # Add volume to table of contents structure: volume title + hierarchical structure of chapters and sections below it
                         toc_structure.append((volume_link, volume_chapters))
@@ -1330,10 +1367,10 @@ def txt_to_epub(txt_file: str, epub_file: str, title: Optional[str] = None,
 
                             # Report progress to context during chapter assembly (95% to 99%)
                             processed_chapters += 1
-                            if context and total_chapters > 0:
+                            if progress_context and total_chapters > 0:
                                 progress = 95 + int((processed_chapters / total_chapters) * 4)
                                 progress = min(progress, 99)
-                                context.report_progress(progress)
+                                progress_context.report_progress(progress)
 
             pbar.update(1)
 
@@ -1356,8 +1393,8 @@ def txt_to_epub(txt_file: str, epub_file: str, title: Optional[str] = None,
             pbar.update(1)
 
             # EPUB file writing completed, report 100% progress
-            if context:
-                context.report_progress(100)
+            if progress_context:
+                progress_context.report_progress(100)
 
         # Verify conversion content integrity
         is_valid, validation_report = validate_conversion_integrity(content, volumes)
