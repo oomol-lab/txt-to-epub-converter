@@ -115,3 +115,100 @@ def test_cover_generator_prefers_fusion_for_llm_oomol_base_url():
     )
 
     assert generator._should_use_fusion_api() is True
+
+
+def test_ai_cover_hides_unknown_author_by_default(monkeypatch):
+    from txt_to_epub.core import _generate_ai_cover_image
+    from txt_to_epub import ParserConfig
+
+    captured = {'author': None}
+
+    class FakeCoverGenerator:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def generate_cover(self, **kwargs):
+            captured['author'] = kwargs.get('author')
+            return {'success': True, 'cover_path': _create_png_file()}
+
+        def get_stats(self):
+            return {'total_calls': 1}
+
+    monkeypatch.setattr('txt_to_epub.ai.CoverGenerator', FakeCoverGenerator)
+
+    config = ParserConfig(enable_ai_cover=True)
+    cover_path, generated, usage, warnings = _generate_ai_cover_image(
+        content='示例正文',
+        language='chinese',
+        title='无名之书',
+        author='Unknown Author',
+        metadata_payload={},
+        config=config
+    )
+
+    try:
+        assert generated is True
+        assert captured['author'] == ''
+        assert usage['total_calls'] == 1
+        assert warnings == []
+    finally:
+        if cover_path and os.path.exists(cover_path):
+            os.unlink(cover_path)
+
+
+def test_ai_cover_can_keep_unknown_author_when_disabled(monkeypatch):
+    from txt_to_epub.core import _generate_ai_cover_image
+    from txt_to_epub import ParserConfig
+
+    captured = {'author': None}
+
+    class FakeCoverGenerator:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def generate_cover(self, **kwargs):
+            captured['author'] = kwargs.get('author')
+            return {'success': True, 'cover_path': _create_png_file()}
+
+        def get_stats(self):
+            return {'total_calls': 1}
+
+    monkeypatch.setattr('txt_to_epub.ai.CoverGenerator', FakeCoverGenerator)
+
+    config = ParserConfig(enable_ai_cover=True, hide_unknown_author=False)
+    cover_path, generated, usage, warnings = _generate_ai_cover_image(
+        content='示例正文',
+        language='chinese',
+        title='无名之书',
+        author='Unknown Author',
+        metadata_payload={},
+        config=config
+    )
+
+    try:
+        assert generated is True
+        assert captured['author'] == 'Unknown Author'
+        assert usage['total_calls'] == 1
+        assert warnings == []
+    finally:
+        if cover_path and os.path.exists(cover_path):
+            os.unlink(cover_path)
+
+
+def test_cover_prompt_omits_placeholder_author_text():
+    from txt_to_epub.ai.cover_generator import CoverGenerator
+
+    prompt = CoverGenerator._build_cover_prompt(
+        title='无名之书',
+        author='',
+        description='一个悬疑故事',
+        tags=['悬疑'],
+        language='chinese',
+        style_hint='',
+        content_sample='第一章开始',
+        source_hint='sample'
+    )
+
+    assert 'Author: Unknown' not in prompt
+    assert 'Author: [omit]' in prompt
+    assert 'Do not render any author name text on the cover.' in prompt

@@ -184,3 +184,31 @@ def test_ai_illustration_continuity_guide_is_passed(monkeypatch):
         for path in generated_paths:
             if os.path.exists(path):
                 os.unlink(path)
+
+
+def test_first_chapter_always_gets_illustration():
+    from txt_to_epub import ParserConfig
+    from txt_to_epub.core import _should_generate_chapter_illustration
+
+    config = ParserConfig(
+        enable_ai_illustrations=True,
+        ai_illustration_min_chapter_chars=1000,
+        ai_illustration_chapter_interval=99,
+        ai_illustration_max_images_per_book=2
+    )
+
+    # First chapter should be forced on, even if below min chars and using low-density interval.
+    assert _should_generate_chapter_illustration(
+        chapter_index=1,
+        chapter_text="很短。",
+        generated_count=0,
+        config=config
+    ) is True
+
+    # Other chapters still follow regular interval strategy.
+    assert _should_generate_chapter_illustration(
+        chapter_index=2,
+        chapter_text="这是一段足够长的章节内容。" * 100,
+        generated_count=1,
+        config=config
+    ) is False

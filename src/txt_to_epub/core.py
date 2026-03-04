@@ -134,6 +134,30 @@ def _normalize_subjects(raw_subjects: Any, max_tags: int = 8) -> List[str]:
     return deduped
 
 
+def _is_unknown_author(author: Optional[str]) -> bool:
+    """Check whether author should be treated as unknown/placeholder."""
+    if author is None:
+        return True
+
+    normalized = str(author).strip().lower()
+    if not normalized:
+        return True
+
+    unknown_values = {
+        'unknown',
+        'unknown author',
+        'n/a',
+        'na',
+        'none',
+        'null',
+        '未知',
+        '未知作者',
+        '佚名',
+        '匿名',
+    }
+    return normalized in unknown_values
+
+
 def _resolve_book_metadata(
     title: str,
     author: str,
@@ -267,9 +291,13 @@ def _generate_ai_cover_image(
             quality=config.ai_cover_quality
         )
 
+        cover_author = author
+        if getattr(config, 'hide_unknown_author', True) and _is_unknown_author(author):
+            cover_author = ''
+
         result = generator.generate_cover(
             title=title,
-            author=author,
+            author=cover_author,
             description=metadata_payload.get('description', ''),
             tags=metadata_payload.get('subjects', []),
             language=language,
@@ -325,6 +353,10 @@ def _should_generate_chapter_illustration(
     max_images = max(0, int(getattr(config, "ai_illustration_max_images_per_book", 0)))
     if max_images <= 0 or generated_count >= max_images:
         return False
+
+    # Always reserve the opening visual beat for chapter one when illustrations are enabled.
+    if chapter_index == 1:
+        return True
 
     interval = max(1, int(getattr(config, "ai_illustration_chapter_interval", 1)))
     if (chapter_index - 1) % interval != 0:

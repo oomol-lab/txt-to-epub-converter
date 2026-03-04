@@ -192,6 +192,9 @@ class ParserConfig:
     ai_cover_context_chars: int = 2000
     """Character count sampled from the beginning of the book for cover context (minimum 1000)."""
 
+    hide_unknown_author: bool = True
+    """Hide author text on AI cover prompts when author is empty/unknown."""
+
     # ========== AI Chapter Illustration Configuration ==========
 
     enable_ai_illustrations: bool = False
@@ -355,6 +358,7 @@ class ParserConfig:
                 ai_cover_quality=config_data.get('ai_cover_quality', 'standard'),
                 ai_cover_style_hint=config_data.get('ai_cover_style_hint'),
                 ai_cover_context_chars=config_data.get('ai_cover_context_chars', 2000),
+                hide_unknown_author=config_data.get('hide_unknown_author', True),
                 # AI illustration configuration
                 enable_ai_illustrations=config_data.get('enable_ai_illustrations', False),
                 ai_illustration_model=config_data.get('ai_illustration_model'),
@@ -428,6 +432,7 @@ class ParserConfig:
             ai_cover_quality=config_dict.get('ai_cover_quality', 'standard'),
             ai_cover_style_hint=config_dict.get('ai_cover_style_hint'),
             ai_cover_context_chars=config_dict.get('ai_cover_context_chars', 2000),
+            hide_unknown_author=config_dict.get('hide_unknown_author', True),
             # AI illustration configuration
             enable_ai_illustrations=config_dict.get('enable_ai_illustrations', False),
             ai_illustration_model=config_dict.get('ai_illustration_model'),
@@ -492,6 +497,7 @@ class ParserConfig:
             'ai_cover_quality': self.ai_cover_quality,
             'ai_cover_style_hint': self.ai_cover_style_hint,
             'ai_cover_context_chars': self.ai_cover_context_chars,
+            'hide_unknown_author': self.hide_unknown_author,
             # AI illustration configuration
             'enable_ai_illustrations': self.enable_ai_illustrations,
             'ai_illustration_model': self.ai_illustration_model,

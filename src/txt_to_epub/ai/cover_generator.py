@@ -226,12 +226,19 @@ class CoverGenerator:
             if opening_signals
             else "- Opening signals: not enough explicit cues, infer conservatively."
         )
+        clean_author = (author or "").strip()
+        author_line = f"Author: {clean_author}" if clean_author else "Author: [omit]"
+        author_requirement = (
+            "- If author typography is used, use exactly the provided author name without rewriting."
+            if clean_author
+            else "- Do not render any author name text on the cover."
+        )
 
         return f"""Design a professional fiction ebook cover.
 
 Language: {lang}
 Title: {title or "Untitled"}
-Author: {author or "Unknown"}
+{author_line}
 Source title hint: {source_text or "N/A"}
 Critical constraints:
 - Vertical composition in strict book-cover ratio.
@@ -247,6 +254,9 @@ Opening excerpt: {opening_excerpt or "N/A"}
 
 Additional requirements:
 - Strong focal element, readable typography area.
+- Typography must be limited to the title (and optional real author name).
+- Never invent placeholder names like "Unknown" or "Unknown Author".
+- {author_requirement}
 - Do NOT rely on title alone.
 - Derive costumes/architecture/props from the provided context signals.
 - If a historical era is implied, keep all visual details consistent with that era.

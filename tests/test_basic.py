@@ -32,6 +32,7 @@ def test_parser_config():
     assert config.llm_base_url == "https://llm.oomol.com/v1"
     assert config.enable_ai_metadata == False
     assert config.enable_ai_cover == False
+    assert config.hide_unknown_author == True
     
     # Test custom config
     config = ParserConfig(
