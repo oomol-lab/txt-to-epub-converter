@@ -17,7 +17,7 @@ def _create_sample_txt() -> str:
         return f.name
 
 
-def test_ai_metadata_is_applied_when_title_author_are_defaults(monkeypatch):
+def test_ai_metadata_is_applied_when_title_is_not_provided(monkeypatch):
     from txt_to_epub import txt_to_epub, ParserConfig
 
     def fake_ai_metadata(*args, **kwargs):
@@ -48,8 +48,6 @@ def test_ai_metadata_is_applied_when_title_author_are_defaults(monkeypatch):
         result = txt_to_epub(
             txt_file=txt_file,
             epub_file=epub_file,
-            title='My Book',
-            author='Unknown',
             config=config,
             show_progress=False
         )
@@ -131,3 +129,108 @@ def test_metadata_overrides_take_precedence(monkeypatch):
             os.unlink(txt_file)
         if os.path.exists(epub_file):
             os.unlink(epub_file)
+
+
+def test_filename_like_title_hint_is_removed_before_ai_metadata(monkeypatch):
+    from txt_to_epub import ParserConfig
+    from txt_to_epub.core import _generate_ai_book_metadata
+
+    captured = {}
+
+    class FakeBookMetadataGenerator:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def generate(self, content, language="chinese", title_hint="", author_hint=""):
+            captured["title_hint"] = title_hint
+            captured["author_hint"] = author_hint
+            return {
+                "success": True,
+                "metadata": {
+                    "title": "雨夜怀表",
+                    "author": "AI 编辑部",
+                    "description": "",
+                    "tags": [],
+                    "publisher": "",
+                    "date": "",
+                    "identifier": "",
+                    "language": "zh",
+                },
+            }
+
+        def get_stats(self):
+            return {"total_calls": 1}
+
+    monkeypatch.setattr("txt_to_epub.ai.BookMetadataGenerator", FakeBookMetadataGenerator)
+
+    config = ParserConfig(enable_ai_metadata=True)
+    _generate_ai_book_metadata(
+        content="第一章 夜雨\n\n一段故事正文。",
+        language="chinese",
+        title_hint="诡秘之主_精校版_20250101.txt",
+        author_hint="Unknown",
+        config=config,
+    )
+
+    assert captured["title_hint"] == ""
+    assert captured["author_hint"] == ""
+
+
+def test_resolve_book_metadata_prefers_ai_title_for_filename_like_input_title():
+    from txt_to_epub.core import _resolve_book_metadata
+
+    resolved_title, resolved_author, resolved_language, metadata_payload = _resolve_book_metadata(
+        title="诡秘之主_精校版_20250101.txt",
+        author="Unknown",
+        detected_language="chinese",
+        metadata_overrides=None,
+        ai_metadata={
+            "title": "诡秘之主",
+            "author": "爱潜水的乌贼",
+            "language": "zh",
+            "description": "desc",
+            "tags": ["奇幻"],
+        },
+        max_tags=8,
+    )
+
+    assert resolved_title == "诡秘之主"
+    assert resolved_author == "爱潜水的乌贼"
+    assert resolved_language == "zh"
+    assert metadata_payload["subjects"] == ["奇幻"]
+
+
+def test_resolve_book_metadata_uses_empty_title_when_no_hint_and_no_ai():
+    from txt_to_epub.core import _resolve_book_metadata
+
+    resolved_title, resolved_author, resolved_language, metadata_payload = _resolve_book_metadata(
+        title=None,
+        author=None,
+        detected_language="chinese",
+        metadata_overrides=None,
+        ai_metadata={},
+        max_tags=8,
+    )
+
+    assert resolved_title == ""
+    assert resolved_author == ""
+    assert resolved_language == "zh"
+    assert metadata_payload["subjects"] == []
+
+
+def test_resolve_book_metadata_treats_unknown_author_as_empty():
+    from txt_to_epub.core import _resolve_book_metadata
+
+    resolved_title, resolved_author, resolved_language, metadata_payload = _resolve_book_metadata(
+        title="示例书名",
+        author="Unknown",
+        detected_language="chinese",
+        metadata_overrides=None,
+        ai_metadata={},
+        max_tags=8,
+    )
+
+    assert resolved_title == "示例书名"
+    assert resolved_author == ""
+    assert resolved_language == "zh"
+    assert metadata_payload["subjects"] == []

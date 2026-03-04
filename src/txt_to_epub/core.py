@@ -1,6 +1,7 @@
 import os
 import logging
 import json
+import re
 import chardet
 from typing import Optional, Dict, Any, List, Tuple
 from ebooklib import epub
@@ -158,9 +159,90 @@ def _is_unknown_author(author: Optional[str]) -> bool:
     return normalized in unknown_values
 
 
+def _is_probable_filename_title(title: Optional[str]) -> bool:
+    """Detect weak title hints that look like filesystem names instead of real book titles."""
+    if title is None:
+        return False
+
+    raw = str(title).strip()
+    if not raw:
+        return False
+
+    lowered = raw.lower()
+    placeholders = {
+        "my book",
+        "book",
+        "untitled",
+        "unknown",
+        "new text document",
+        "document",
+        "未命名",
+        "未知标题",
+    }
+    if lowered in placeholders:
+        return True
+
+    # Paths and common file extensions are strong filename signals.
+    if re.search(r"[\\/]", raw):
+        return True
+    if re.search(r"\.(txt|md|markdown|doc|docx|pdf|epub|rtf|html?)$", lowered):
+        return True
+
+    # Typical release/version file naming patterns.
+    if re.search(r"\b(?:v|ver|version)[\s._-]?\d+(?:\.\d+)*\b", lowered):
+        return True
+
+    quality_tokens = {
+        "final",
+        "draft",
+        "clean",
+        "edited",
+        "完整版",
+        "修订版",
+        "校对版",
+        "精校版",
+        "完结版",
+    }
+    has_quality_token = any(token in lowered for token in quality_tokens)
+    if has_quality_token and (re.search(r"[_-]", raw) or re.search(r"\d{4,}", raw)):
+        return True
+
+    separator_count = raw.count("_") + raw.count("-")
+    if separator_count >= 2 and re.search(r"\d{4,}", raw):
+        return True
+
+    if re.fullmatch(r"[A-Za-z0-9._-]+", raw):
+        if re.search(r"\d", raw) and ("_" in raw or "-" in raw):
+            return True
+        if len(raw) > 24 and ("_" in raw or "-" in raw):
+            return True
+
+    return False
+
+
+def _normalize_title_hint_for_ai(title_hint: str) -> str:
+    """Keep title hint only when it looks like a meaningful book title."""
+    text = (title_hint or "").strip()
+    if not text:
+        return ""
+    if _is_probable_filename_title(text):
+        return ""
+    return text
+
+
+def _normalize_author_hint_for_ai(author_hint: Optional[str]) -> str:
+    """Keep author hint only when it's not an unknown placeholder."""
+    text = (author_hint or "").strip()
+    if not text:
+        return ""
+    if _is_unknown_author(text):
+        return ""
+    return text
+
+
 def _resolve_book_metadata(
-    title: str,
-    author: str,
+    title: Optional[str],
+    author: Optional[str],
     detected_language: str,
     metadata_overrides: Optional[Dict[str, Any]],
     ai_metadata: Optional[Dict[str, Any]],
@@ -170,17 +252,21 @@ def _resolve_book_metadata(
     overrides = metadata_overrides or {}
     generated = ai_metadata or {}
 
-    resolved_title = title
-    if not title or title == 'My Book':
-        resolved_title = overrides.get('title') or generated.get('title') or title or 'My Book'
+    input_title = (title or '').strip()
+    weak_title_hint = (not input_title) or _is_probable_filename_title(input_title)
+    if weak_title_hint:
+        resolved_title = overrides.get('title') or generated.get('title') or input_title
     else:
-        resolved_title = overrides.get('title') or title
+        resolved_title = overrides.get('title') or input_title
+    resolved_title = str(resolved_title or '').strip()
 
-    resolved_author = author
-    if not author or author == 'Unknown':
-        resolved_author = overrides.get('author') or generated.get('author') or author or 'Unknown'
+    input_author = (author or '').strip()
+    weak_author_hint = _is_unknown_author(input_author)
+    if weak_author_hint:
+        resolved_author = overrides.get('author') or generated.get('author') or ''
     else:
-        resolved_author = overrides.get('author') or author
+        resolved_author = overrides.get('author') or input_author
+    resolved_author = str(resolved_author or '').strip()
 
     resolved_language = overrides.get('language') or generated.get('language')
     if resolved_language not in {'zh', 'en'}:
@@ -208,8 +294,8 @@ def _resolve_book_metadata(
 def _generate_ai_book_metadata(
     content: str,
     language: str,
-    title_hint: str,
-    author_hint: str,
+    title_hint: Optional[str],
+    author_hint: Optional[str],
     config: ParserConfig
 ) -> Tuple[Dict[str, Any], bool, Dict[str, Any], List[str]]:
     """Generate metadata using AI, returning metadata/generated/stats/warnings."""
@@ -230,8 +316,8 @@ def _generate_ai_book_metadata(
         result = generator.generate(
             content=content,
             language=language,
-            title_hint=title_hint if title_hint != 'My Book' else '',
-            author_hint=author_hint if author_hint != 'Unknown' else '',
+            title_hint=_normalize_title_hint_for_ai(title_hint),
+            author_hint=_normalize_author_hint_for_ai(author_hint),
         )
         stats = generator.get_stats()
 
@@ -749,8 +835,8 @@ def _write_epub_file(epub_file: str, book: epub.EpubBook) -> None:
         raise Exception(f"Unable to write EPUB file {epub_file}: {e}")
 
 
-def txt_to_epub(txt_file: str, epub_file: str, title: str = 'My Book',
-                author: str = 'Unknown', cover_image: Optional[str] = None,
+def txt_to_epub(txt_file: str, epub_file: str, title: Optional[str] = None,
+                author: Optional[str] = None, cover_image: Optional[str] = None,
                 config: Optional[ParserConfig] = None, show_progress: bool = True,
                 context=None, enable_resume: bool = False,
                 metadata_overrides: Optional[Dict[str, Any]] = None,
@@ -760,8 +846,8 @@ def txt_to_epub(txt_file: str, epub_file: str, title: str = 'My Book',
 
     :param txt_file: Input text file path
     :param epub_file: Output EPUB file path
-    :param title: Book title
-    :param author: Author name
+    :param title: Book title (optional, empty when not provided)
+    :param author: Author name (optional, empty when not provided)
     :param cover_image: Cover image path (optional)
     :param config: Parser configuration (optional)
     :param show_progress: Show progress bar (optional, default True)

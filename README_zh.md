@@ -8,6 +8,8 @@
 
 中文文档 | [English](README.md)
 
+升级说明: [0.2.0 升级指南](UPGRADE_0.2.0.md)
+
 ## ✨ 特性
 
 - **📚 智能章节检测**: 使用模式匹配自动识别层级结构(卷、章、节)
@@ -197,8 +199,8 @@ for txt_file in txt_files:
 |------|------|------|------|
 | `txt_file` | str | 是 | 输入 TXT 文件路径 |
 | `epub_file` | str | 是 | 输出 EPUB 文件路径 |
-| `title` | str | 否 | 书名(默认: "My Book") |
-| `author` | str | 否 | 作者名(默认: "Unknown") |
+| `title` | str | 否 | 书名（默认空字符串；启用 AI metadata 时可自动推断） |
+| `author` | str | 否 | 作者名（默认空字符串；启用 AI metadata 时可自动推断） |
 | `cover_image` | str | 否 | 封面图片路径(PNG/JPG) |
 | `config` | ParserConfig | 否 | 自定义配置 |
 | `show_progress` | bool | 否 | 显示进度条(默认: True) |
