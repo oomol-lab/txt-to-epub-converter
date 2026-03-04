@@ -1060,7 +1060,7 @@ def txt_to_epub(txt_file: str, epub_file: str, title: Optional[str] = None,
             # Calculate total chapters for sub-progress
             total_chapters = sum(len(volume.chapters) for volume in volumes)
 
-            # Track progress for context reporting (5% to 95% = 90% range)
+            # Track progress for context reporting during chapter assembly (95% to 99%)
             processed_chapters = 0
 
             with tqdm(total=total_chapters, desc="  Processing chapters", disable=not show_progress,
@@ -1197,10 +1197,11 @@ def txt_to_epub(txt_file: str, epub_file: str, title: Optional[str] = None,
                             chapter_counter += 1
                             chapter_pbar.update(1)
 
-                            # Report progress to context (5% to 95% range)
+                            # Report progress to context during chapter assembly (95% to 99%)
                             processed_chapters += 1
                             if context and total_chapters > 0:
-                                progress = 5 + int((processed_chapters / total_chapters) * 90)
+                                progress = 95 + int((processed_chapters / total_chapters) * 4)
+                                progress = min(progress, 99)
                                 context.report_progress(progress)
 
                         # Add volume to table of contents structure: volume title + hierarchical structure of chapters and sections below it
@@ -1327,10 +1328,11 @@ def txt_to_epub(txt_file: str, epub_file: str, title: Optional[str] = None,
                             chapter_counter += 1
                             chapter_pbar.update(1)
 
-                            # Report progress to context (5% to 95% range)
+                            # Report progress to context during chapter assembly (95% to 99%)
                             processed_chapters += 1
                             if context and total_chapters > 0:
-                                progress = 5 + int((processed_chapters / total_chapters) * 90)
+                                progress = 95 + int((processed_chapters / total_chapters) * 4)
+                                progress = min(progress, 99)
                                 context.report_progress(progress)
 
             pbar.update(1)

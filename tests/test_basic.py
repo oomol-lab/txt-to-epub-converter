@@ -87,5 +87,49 @@ def test_version():
     assert isinstance(__version__, str)
 
 
+def test_context_progress_is_monotonic():
+    """Test context progress values never decrease during conversion."""
+    from txt_to_epub import txt_to_epub
+
+    class FakeContext:
+        def __init__(self):
+            self.values = []
+
+        def report_progress(self, value):
+            self.values.append(value)
+
+    context = FakeContext()
+
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False, encoding='utf-8') as f:
+        f.write("第一章 开始\n\n这是第一章的内容。\n\n")
+        f.write("第二章 继续\n\n这是第二章的内容。\n\n")
+        f.write("第三章 结尾\n\n这是第三章的内容。\n\n")
+        txt_file = f.name
+
+    with tempfile.NamedTemporaryFile(suffix='.epub', delete=False) as f:
+        epub_file = f.name
+
+    try:
+        result = txt_to_epub(
+            txt_file=txt_file,
+            epub_file=epub_file,
+            title="测试书籍",
+            author="测试作者",
+            context=context,
+            show_progress=False,
+        )
+
+        assert result["success"] is True
+        assert context.values, "Expected progress to be reported"
+        assert context.values[0] == 1
+        assert context.values[-1] == 100
+        assert all(curr >= prev for prev, curr in zip(context.values, context.values[1:])), context.values
+    finally:
+        if os.path.exists(txt_file):
+            os.unlink(txt_file)
+        if os.path.exists(epub_file):
+            os.unlink(epub_file)
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
