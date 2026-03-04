@@ -15,6 +15,79 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - CLI tool for command-line usage
 - GUI application
 
+## [0.2.4] - 2026-03-04
+
+### Fixed
+
+- Fixed AI metadata/cover handoff for source-slug titles (for example `qm` from `qm.txt`) so resolved cover title/author correctly prefer AI-detected metadata instead of filename-like placeholders
+- Unified `source_hint` propagation in conversion pipeline to keep metadata, cover, and illustration prompt context consistent
+
+### Tests
+
+- Added regression tests for source-slug title hint normalization and metadata resolution fallback behavior
+- Added integration-style regression test to assert AI cover receives AI-resolved title/author when input title equals a short source slug
+
+## [0.2.3] - 2026-03-04
+
+### Fixed
+
+- Eliminated transient progress flicker in multi-volume parsing by enforcing monotonic progress reporting at the conversion entrypoint
+- Added multi-volume regression test to guarantee progress never moves backward
+
+## [0.2.2] - 2026-03-04
+
+### Fixed
+
+- Fixed context progress regression where conversion progress could jump backward (for example from 95% to 10%)
+- Added regression test to ensure reported progress is monotonic from start to finish
+
+## [0.2.1] - 2026-03-04
+
+### Changed
+
+- Patch release for package publishing and version alignment
+
+## [0.2.0] - 2026-03-04
+
+### Changed
+
+- Simplified illustration density configuration to four presets: `低` / `中` / `高` / `超高`
+- Added preset alias support (`low`/`medium`/`high`/`ultra`) and unified density-policy resolution
+- Unified AI conversion return payload under `result["ai"]`
+- Added chapter-level illustration result details under `result["ai"]["illustration"]["chapter_results"]`
+
+### Breaking Changes
+
+- Removed legacy top-level AI result fields from conversion return values:
+  - `ai_metadata_generated`
+  - `ai_cover_generated`
+  - `ai_illustrations_generated`
+  - `ai_illustration_continuity_generated`
+  - `ai_usage`
+  - `ai_warnings`
+
+## [0.1.4] - 2026-03-03
+
+### Changed
+
+- Set default `llm_base_url` to `https://llm.oomol.com/v1`
+- Clarified API key guidance to use OOMOL Console (`https://console.oomol.com/`)
+- Improved Fusion API routing rules for OOMOL base URLs
+
+### Documentation
+
+- Updated README and README_zh examples and parameter table for OOMOL defaults
+
+### Tests
+
+- Added coverage for default base URL and Fusion selection behavior
+
+## [0.1.3] - 2026-03-03
+
+### Added
+
+- Enhanced AI capabilities for cover and illustration generation
+
 ## [0.1.2] - 2025-01-27
 
 ### Changed
@@ -105,5 +178,14 @@ This library was extracted from the Oomol txt-to-epub task and refactored into a
 - Web service API
 - Docker container support
 
-[Unreleased]: https://github.com/yourusername/txt-to-epub-converter/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/yourusername/txt-to-epub-converter/compare/v0.2.4...HEAD
+[0.2.4]: https://github.com/yourusername/txt-to-epub-converter/compare/v0.2.3...v0.2.4
+[0.2.3]: https://github.com/yourusername/txt-to-epub-converter/compare/v0.2.2...v0.2.3
+[0.2.2]: https://github.com/yourusername/txt-to-epub-converter/compare/v0.2.1...v0.2.2
+[0.2.1]: https://github.com/yourusername/txt-to-epub-converter/compare/v0.2.0...v0.2.1
+[0.2.0]: https://github.com/yourusername/txt-to-epub-converter/compare/v0.1.4...v0.2.0
+[0.1.4]: https://github.com/yourusername/txt-to-epub-converter/compare/v0.1.3...v0.1.4
+[0.1.3]: https://github.com/yourusername/txt-to-epub-converter/compare/v0.1.2...v0.1.3
+[0.1.2]: https://github.com/yourusername/txt-to-epub-converter/compare/v0.1.1...v0.1.2
+[0.1.1]: https://github.com/yourusername/txt-to-epub-converter/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/yourusername/txt-to-epub-converter/releases/tag/v0.1.0

@@ -2,6 +2,34 @@ from ebooklib import epub
 from typing import Optional
 
 
+def _get_illustration_blocks(
+    illustration_href: Optional[str],
+    illustration_caption: Optional[str],
+    illustration_position: str = "head"
+) -> tuple[str, str]:
+    """
+    Generate illustration HTML blocks for chapter pages.
+
+    :return: (head_block, tail_block)
+    """
+    if not illustration_href:
+        return "", ""
+
+    caption_html = f'<p class="duokan-note">{illustration_caption}</p>' if illustration_caption else ""
+    block = (
+        f'<div class="duokan-image-single">'
+        f'<img class="duokan-image" src="{illustration_href}" alt="{illustration_caption or "chapter illustration"}"/>'
+        f'{caption_html}'
+        f'</div>'
+    )
+    normalized_pos = (illustration_position or "head").strip().lower()
+    if normalized_pos not in {"head", "tail"}:
+        normalized_pos = "head"
+    if normalized_pos == "tail":
+        return "", block
+    return block, ""
+
+
 def _get_watermark_html(watermark_text: str) -> str:
     """
     Generate watermark HTML.
@@ -95,7 +123,9 @@ def create_volume_page(volume_title: str, file_name: str, chapter_count: int,
 
 
 def create_chapter_page(chapter_title: str, chapter_content: str, file_name: str, section_count: int,
-                       watermark_text: Optional[str] = None) -> epub.EpubHtml:
+                       watermark_text: Optional[str] = None, illustration_href: Optional[str] = None,
+                       illustration_caption: Optional[str] = None,
+                       illustration_position: str = "head") -> epub.EpubHtml:
     """
     Create chapter page (for chapters with sections) with modern design.
 
@@ -110,6 +140,11 @@ def create_chapter_page(chapter_title: str, chapter_content: str, file_name: str
 
     # Generate watermark HTML
     watermark_html = _get_watermark_html(watermark_text) if watermark_text else ""
+    illustration_head, illustration_tail = _get_illustration_blocks(
+        illustration_href=illustration_href,
+        illustration_caption=illustration_caption,
+        illustration_position=illustration_position
+    )
 
     # Create elegant chapter page content
     if chapter_content.strip():
@@ -142,9 +177,11 @@ def create_chapter_page(chapter_title: str, chapter_content: str, file_name: str
         <body class="chinese-text">
             <div class="chapter-content">
                 <h1 class="chapter-title">{chapter_title}</h1>
+                {illustration_head}
                 <div style="margin-top: 1.5rem; margin-bottom: 2rem;">
                     <pre>{chapter_content}</pre>
                 </div>
+                {illustration_tail}
                 <div style="margin-top: 2rem;">
                     <div style="font-size: 3em; margin-bottom: 1.5rem;">📚</div>
                     <p style="color: #2c3e50; font-size: 1.3em; font-weight: 500;">
@@ -184,6 +221,8 @@ def create_chapter_page(chapter_title: str, chapter_content: str, file_name: str
         <body class="chinese-text">
             <div class="chapter-content">
                 <h1 class="chapter-title">{chapter_title}</h1>
+                {illustration_head}
+                {illustration_tail}
                 <div style="margin-top: 2rem;">
                     <div style="font-size: 3em; margin-bottom: 1.5rem;">📚</div>
                     <p style="color: #2c3e50; font-size: 1.3em; font-weight: 500;">
@@ -250,11 +289,18 @@ def create_section_page(section_title: str, section_content: str, file_name: str
 
 
 
-def create_chapter(title: str, content: str, file_name: str) -> epub.EpubHtml:
+def create_chapter(title: str, content: str, file_name: str, illustration_href: Optional[str] = None,
+                   illustration_caption: Optional[str] = None,
+                   illustration_position: str = "head") -> epub.EpubHtml:
     """
     Create EPUB chapter with modern design.
     """
     chapter = epub.EpubHtml(title=title, file_name=file_name, lang='zh')
+    illustration_head, illustration_tail = _get_illustration_blocks(
+        illustration_href=illustration_href,
+        illustration_caption=illustration_caption,
+        illustration_position=illustration_position
+    )
     
     if content:
         chapter.content = f'''
@@ -268,9 +314,11 @@ def create_chapter(title: str, content: str, file_name: str) -> epub.EpubHtml:
         </head>
         <body class="chinese-text">
             <h1 class="chapter-title">{title}</h1>
+            {illustration_head}
             <div style="margin-top: 1.5rem;">
                 <pre>{content}</pre>
             </div>
+            {illustration_tail}
         </body>
         </html>
         '''
@@ -286,6 +334,8 @@ def create_chapter(title: str, content: str, file_name: str) -> epub.EpubHtml:
         </head>
         <body class="chinese-text">
             <h1 class="chapter-title">{title}</h1>
+            {illustration_head}
+            {illustration_tail}
         </body>
         </html>
         '''

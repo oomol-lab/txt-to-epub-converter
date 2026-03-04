@@ -8,6 +8,8 @@
 
 中文文档 | [English](README.md)
 
+升级说明: [0.2.0 升级指南](UPGRADE_0.2.0.md)
+
 ## ✨ 特性
 
 - **📚 智能章节检测**: 使用模式匹配自动识别层级结构(卷、章、节)
@@ -84,8 +86,8 @@ config = ParserConfig(
 
     # 启用 AI 辅助
     enable_llm_assistance=True,
-    llm_api_key="your-api-key",
-    llm_base_url="https://api.openai.com/v1",
+    llm_api_key="your-api-key",  # 建议去 https://console.oomol.com/ 获取
+    llm_base_url="https://llm.oomol.com/v1",
     llm_model="gpt-4o-mini",
 
     # 水印
@@ -185,8 +187,8 @@ for txt_file in txt_files:
 | `min_chapter_length` | int | 50 | 每章最少字符数 |
 | `max_chapter_length` | int | 100000 | 每章最多字符数 |
 | `enable_llm_assistance` | bool | False | 启用 AI 增强解析 |
-| `llm_api_key` | str | None | OpenAI 兼容 API 密钥 |
-| `llm_base_url` | str | OpenAI URL | API 基础 URL |
+| `llm_api_key` | str | None | API 密钥（建议从 https://console.oomol.com/ 获取） |
+| `llm_base_url` | str | `https://llm.oomol.com/v1` | API 基础 URL |
 | `llm_model` | str | "gpt-4o-mini" | 模型名称 |
 | `enable_watermark` | bool | False | 启用水印 |
 | `watermark_text` | str | None | 水印文本 |
@@ -197,8 +199,8 @@ for txt_file in txt_files:
 |------|------|------|------|
 | `txt_file` | str | 是 | 输入 TXT 文件路径 |
 | `epub_file` | str | 是 | 输出 EPUB 文件路径 |
-| `title` | str | 否 | 书名(默认: "My Book") |
-| `author` | str | 否 | 作者名(默认: "Unknown") |
+| `title` | str | 否 | 书名（默认空字符串；启用 AI metadata 时可自动推断） |
+| `author` | str | 否 | 作者名（默认空字符串；启用 AI metadata 时可自动推断） |
 | `cover_image` | str | 否 | 封面图片路径(PNG/JPG) |
 | `config` | ParserConfig | 否 | 自定义配置 |
 | `show_progress` | bool | 否 | 显示进度条(默认: True) |

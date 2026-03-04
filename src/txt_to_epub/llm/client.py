@@ -1,9 +1,12 @@
 """
 LLM API client wrapper
 """
+import base64
 import json
 import logging
-from typing import Dict
+from typing import Dict, Optional
+
+import requests
 
 logger = logging.getLogger(__name__)
 
@@ -160,6 +163,50 @@ class LLMClient:
     def get_stats(self) -> Dict:
         """Get usage statistics"""
         return self.stats.copy()
+
+    def generate_image(
+        self,
+        prompt: str,
+        model: Optional[str] = None,
+        size: str = "1024x1536",
+        quality: str = "standard"
+    ) -> bytes:
+        """
+        Generate image bytes from prompt using OpenAI-compatible image API.
+
+        :param prompt: Image prompt text
+        :param model: Image model name
+        :param size: Image size
+        :param quality: Image quality
+        :return: PNG image bytes
+        """
+        try:
+            self.stats['total_calls'] += 1
+
+            response = self.client.images.generate(
+                model=model or self.model,
+                prompt=prompt,
+                size=size,
+                quality=quality
+            )
+
+            if not response.data:
+                raise ValueError("Image generation returned empty data")
+
+            first = response.data[0]
+
+            if getattr(first, "b64_json", None):
+                return base64.b64decode(first.b64_json)
+
+            if getattr(first, "url", None):
+                download = requests.get(first.url, timeout=30)
+                download.raise_for_status()
+                return download.content
+
+            raise ValueError("Image response missing b64_json/url payload")
+        except Exception as e:
+            logger.error(f"Image generation failed: {e}")
+            raise
 
     def reset_stats(self):
         """Reset statistics"""

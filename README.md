@@ -8,6 +8,8 @@ A powerful Python library for converting plain text files (.txt) to professional
 
 [中文文档](README_zh.md) | English
 
+Upgrade notes: [0.2.0 Upgrade Guide](UPGRADE_0.2.0.md)
+
 ## ✨ Features
 
 - **📚 Intelligent Chapter Detection**: Automatically identifies hierarchical structure (volumes, chapters, sections) using pattern matching
@@ -84,8 +86,8 @@ config = ParserConfig(
 
     # Enable AI assistance
     enable_llm_assistance=True,
-    llm_api_key="your-api-key",
-    llm_base_url="https://api.openai.com/v1",
+    llm_api_key="your-api-key",  # Get key from https://console.oomol.com/
+    llm_base_url="https://llm.oomol.com/v1",
     llm_model="gpt-4o-mini",
 
     # Watermark
@@ -101,7 +103,7 @@ config = ParserConfig(
 result = txt_to_epub(
     txt_file="my_book.txt",
     epub_file="output/my_book.epub",
-    title="My Book",
+    title="My Novel",
     author="Author Name",
     cover_image="cover.jpg",  # Optional cover image
     config=config,
@@ -185,8 +187,8 @@ for txt_file in txt_files:
 | `min_chapter_length` | int | 50 | Minimum characters per chapter |
 | `max_chapter_length` | int | 100000 | Maximum characters per chapter |
 | `enable_llm_assistance` | bool | False | Enable AI-enhanced parsing |
-| `llm_api_key` | str | None | OpenAI-compatible API key |
-| `llm_base_url` | str | OpenAI URL | API base URL |
+| `llm_api_key` | str | None | API key (recommended from https://console.oomol.com/) |
+| `llm_base_url` | str | `https://llm.oomol.com/v1` | API base URL |
 | `llm_model` | str | "gpt-4o-mini" | Model name |
 | `enable_watermark` | bool | False | Enable watermark |
 | `watermark_text` | str | None | Watermark text |
@@ -197,8 +199,8 @@ for txt_file in txt_files:
 |-----------|------|----------|-------------|
 | `txt_file` | str | Yes | Input TXT file path |
 | `epub_file` | str | Yes | Output EPUB file path |
-| `title` | str | No | Book title (default: "My Book") |
-| `author` | str | No | Author name (default: "Unknown") |
+| `title` | str | No | Book title (default: empty; AI metadata can infer when enabled) |
+| `author` | str | No | Author name (default: empty; AI metadata can infer when enabled) |
 | `cover_image` | str | No | Cover image path (PNG/JPG) |
 | `config` | ParserConfig | No | Custom configuration |
 | `show_progress` | bool | No | Show progress bar (default: True) |
