@@ -67,9 +67,12 @@ def test_ai_illustrations_generated_and_embedded(monkeypatch):
         )
 
         assert result["success"] is True
-        assert result["ai_illustrations_generated"] == 2
+        assert result["ai"]["illustration"]["generated_count"] == 2
         assert call_counter["count"] == 2
-        assert result["ai_usage"]["total_calls"] >= 2
+        assert result["ai"]["usage"]["total_calls"] >= 2
+        assert result["ai"]["illustration"]["failed_count"] == 0
+        assert len(result["ai"]["illustration"]["chapter_results"]) == 2
+        assert all(item["status"] == "generated" for item in result["ai"]["illustration"]["chapter_results"])
 
         with zipfile.ZipFile(epub_file, "r") as zf:
             names = zf.namelist()
@@ -109,7 +112,8 @@ def test_ai_illustrations_not_called_when_disabled(monkeypatch):
         )
 
         assert result["success"] is True
-        assert result["ai_illustrations_generated"] == 0
+        assert result["ai"]["illustration"]["generated_count"] == 0
+        assert result["ai"]["illustration"]["attempted_count"] == 0
     finally:
         if os.path.exists(txt_file):
             os.unlink(txt_file)
@@ -172,7 +176,7 @@ def test_ai_illustration_continuity_guide_is_passed(monkeypatch):
         )
 
         assert result["success"] is True
-        assert result["ai_illustration_continuity_generated"] is True
+        assert result["ai"]["illustration"]["continuity_generated"] is True
         assert captured["guide"] is not None
         assert captured["guide"]["characters"][0]["name"] == "主角"
         assert captured["focus"] == ["主角"]

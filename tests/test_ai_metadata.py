@@ -55,8 +55,8 @@ def test_ai_metadata_is_applied_when_title_author_are_defaults(monkeypatch):
         )
 
         assert result['success'] is True
-        assert result['ai_metadata_generated'] is True
-        assert result['ai_usage']['total_calls'] == 1
+        assert result['ai']['metadata']['generated'] is True
+        assert result['ai']['usage']['total_calls'] == 1
 
         book = epub.read_epub(epub_file)
         titles = [value for value, _ in book.get_metadata('DC', 'title')]

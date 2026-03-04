@@ -59,9 +59,9 @@ def test_ai_cover_generated_when_no_cover_image(monkeypatch):
         )
 
         assert result['success'] is True
-        assert result['ai_cover_generated'] is True
+        assert result['ai']['cover']['generated'] is True
         assert set_cover_called['path'] == generated_cover_path
-        assert result['ai_usage']['total_calls'] == 1
+        assert result['ai']['usage']['total_calls'] == 1
         assert not os.path.exists(generated_cover_path)
     finally:
         if os.path.exists(txt_file):
@@ -95,7 +95,7 @@ def test_ai_cover_not_called_when_cover_image_provided(monkeypatch):
             show_progress=False
         )
         assert result['success'] is True
-        assert result['ai_cover_generated'] is False
+        assert result['ai']['cover']['generated'] is False
     finally:
         if os.path.exists(txt_file):
             os.unlink(txt_file)

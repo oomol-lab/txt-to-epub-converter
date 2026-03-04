@@ -352,6 +352,15 @@ def _resolve_ai_illustration_policy(config: ParserConfig) -> Dict[str, int]:
     }
 
 
+def _resolve_ai_illustration_density(config: ParserConfig) -> Optional[str]:
+    """Resolve canonical illustration density label when available."""
+    resolver = getattr(config, "get_ai_illustration_density", None)
+    if callable(resolver):
+        return resolver()
+    raw = str(getattr(config, "ai_illustration_density", "") or "").strip()
+    return raw or None
+
+
 def _should_generate_chapter_illustration(
     chapter_index: int,
     chapter_text: str,
@@ -808,6 +817,9 @@ def txt_to_epub(txt_file: str, epub_file: str, title: str = 'My Book',
     ai_illustration_continuity_generated = False
     ai_usage: Dict[str, Any] = {}
     ai_warnings: List[str] = []
+    ai_illustration_attempted = 0
+    ai_illustration_skipped = 0
+    ai_illustration_results: List[Dict[str, Any]] = []
     generated_cover_path: Optional[str] = None
     generated_illustration_paths: List[str] = []
     illustration_continuity_guide: Dict[str, Any] = {}
@@ -983,12 +995,14 @@ def txt_to_epub(txt_file: str, epub_file: str, title: str = 'My Book',
                             chapter_pbar.set_description(f"  Processing: {chapter.title[:20]}")
                             chapter_illustration_href = None
                             chapter_sample_text = _extract_chapter_illustration_text(chapter)
-                            if _should_generate_chapter_illustration(
+                            should_generate_illustration = _should_generate_chapter_illustration(
                                 chapter_index=chapter_counter,
                                 chapter_text=chapter_sample_text,
                                 generated_count=ai_illustrations_generated,
                                 config=config
-                            ):
+                            )
+                            if should_generate_illustration:
+                                ai_illustration_attempted += 1
                                 chapter_character_focus = _select_chapter_character_focus(
                                     chapter_text=chapter_sample_text,
                                     continuity_guide=illustration_continuity_guide
@@ -1016,15 +1030,36 @@ def txt_to_epub(txt_file: str, epub_file: str, title: str = 'My Book',
                                         book.add_item(image_item)
                                         ai_illustrations_generated += 1
                                         generated_illustration_paths.append(image_path)
+                                        ai_illustration_results.append({
+                                            "chapter_index": chapter_counter,
+                                            "chapter_title": chapter.title,
+                                            "status": "generated",
+                                            "image_href": chapter_illustration_href
+                                        })
                                     except Exception as image_error:
                                         warning = f"AI illustration embedding failed ({chapter.title}): {image_error}"
                                         ai_warnings.append(warning)
                                         logger.warning(warning)
+                                        ai_illustration_results.append({
+                                            "chapter_index": chapter_counter,
+                                            "chapter_title": chapter.title,
+                                            "status": "failed_embedding",
+                                            "reason": str(image_error)
+                                        })
                                         if os.path.exists(image_path):
                                             try:
                                                 os.unlink(image_path)
                                             except OSError:
                                                 pass
+                                else:
+                                    ai_illustration_results.append({
+                                        "chapter_index": chapter_counter,
+                                        "chapter_title": chapter.title,
+                                        "status": "failed_generation",
+                                        "reason": image_warnings[-1] if image_warnings else "unknown_error"
+                                    })
+                            else:
+                                ai_illustration_skipped += 1
 
                             if chapter.sections:  # Chapter has sections
                                 # Create chapter page
@@ -1090,12 +1125,14 @@ def txt_to_epub(txt_file: str, epub_file: str, title: str = 'My Book',
                             chapter_pbar.set_description(f"  Processing: {chapter.title[:20]}")
                             chapter_illustration_href = None
                             chapter_sample_text = _extract_chapter_illustration_text(chapter)
-                            if _should_generate_chapter_illustration(
+                            should_generate_illustration = _should_generate_chapter_illustration(
                                 chapter_index=chapter_counter,
                                 chapter_text=chapter_sample_text,
                                 generated_count=ai_illustrations_generated,
                                 config=config
-                            ):
+                            )
+                            if should_generate_illustration:
+                                ai_illustration_attempted += 1
                                 chapter_character_focus = _select_chapter_character_focus(
                                     chapter_text=chapter_sample_text,
                                     continuity_guide=illustration_continuity_guide
@@ -1123,15 +1160,36 @@ def txt_to_epub(txt_file: str, epub_file: str, title: str = 'My Book',
                                         book.add_item(image_item)
                                         ai_illustrations_generated += 1
                                         generated_illustration_paths.append(image_path)
+                                        ai_illustration_results.append({
+                                            "chapter_index": chapter_counter,
+                                            "chapter_title": chapter.title,
+                                            "status": "generated",
+                                            "image_href": chapter_illustration_href
+                                        })
                                     except Exception as image_error:
                                         warning = f"AI illustration embedding failed ({chapter.title}): {image_error}"
                                         ai_warnings.append(warning)
                                         logger.warning(warning)
+                                        ai_illustration_results.append({
+                                            "chapter_index": chapter_counter,
+                                            "chapter_title": chapter.title,
+                                            "status": "failed_embedding",
+                                            "reason": str(image_error)
+                                        })
                                         if os.path.exists(image_path):
                                             try:
                                                 os.unlink(image_path)
                                             except OSError:
                                                 pass
+                                else:
+                                    ai_illustration_results.append({
+                                        "chapter_index": chapter_counter,
+                                        "chapter_title": chapter.title,
+                                        "status": "failed_generation",
+                                        "reason": image_warnings[-1] if image_warnings else "unknown_error"
+                                    })
+                            else:
+                                ai_illustration_skipped += 1
 
                             if chapter.sections:  # Chapter has sections
                                 # Create chapter page
@@ -1228,6 +1286,27 @@ def txt_to_epub(txt_file: str, epub_file: str, title: str = 'My Book',
             resume_state.mark_completed()
             resume_state.cleanup()
 
+        ai_summary = {
+            "metadata": {
+                "generated": ai_metadata_generated
+            },
+            "cover": {
+                "generated": ai_cover_generated
+            },
+            "illustration": {
+                "density": _resolve_ai_illustration_density(config),
+                "policy": _resolve_ai_illustration_policy(config),
+                "continuity_generated": ai_illustration_continuity_generated,
+                "attempted_count": ai_illustration_attempted,
+                "generated_count": ai_illustrations_generated,
+                "failed_count": max(0, ai_illustration_attempted - ai_illustrations_generated),
+                "skipped_count": ai_illustration_skipped,
+                "chapter_results": ai_illustration_results
+            },
+            "usage": ai_usage,
+            "warnings": ai_warnings
+        }
+
         return {
             "success": True,
             "output_file": epub_file,
@@ -1235,12 +1314,7 @@ def txt_to_epub(txt_file: str, epub_file: str, title: str = 'My Book',
             "validation_report": validation_report,
             "volumes_count": len(volumes),
             "chapters_count": sum(len(volume.chapters) for volume in volumes),
-            "ai_metadata_generated": ai_metadata_generated,
-            "ai_cover_generated": ai_cover_generated,
-            "ai_illustrations_generated": ai_illustrations_generated,
-            "ai_illustration_continuity_generated": ai_illustration_continuity_generated,
-            "ai_usage": ai_usage,
-            "ai_warnings": ai_warnings
+            "ai": ai_summary
         }
 
     except Exception as e:
