@@ -8,6 +8,7 @@ To run tests:
 import pytest
 import os
 import tempfile
+import zipfile
 from pathlib import Path
 
 
@@ -85,6 +86,47 @@ def test_version():
     from txt_to_epub import __version__
     assert __version__ is not None
     assert isinstance(__version__, str)
+
+
+def test_generated_epub_uses_paragraph_markup_for_content():
+    """Ensure body content is rendered as paragraph tags for reader compatibility."""
+    from txt_to_epub import txt_to_epub
+
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False, encoding='utf-8') as f:
+        f.write("第一章 开始\n\n")
+        f.write("这是第一段。\n\n")
+        f.write("这是第二段，包含 <标签> 与 & 符号。\n")
+        txt_file = f.name
+
+    with tempfile.NamedTemporaryFile(suffix='.epub', delete=False) as f:
+        epub_file = f.name
+
+    try:
+        result = txt_to_epub(
+            txt_file=txt_file,
+            epub_file=epub_file,
+            title="段落测试",
+            author="测试作者",
+            show_progress=False,
+        )
+
+        assert result["success"] is True
+
+        with zipfile.ZipFile(epub_file, "r") as zf:
+            xhtml_payload = "\n".join(
+                zf.read(name).decode("utf-8")
+                for name in zf.namelist()
+                if name.endswith(".xhtml")
+            )
+
+        assert "<pre>" not in xhtml_payload
+        assert "<p>这是第一段。</p>" in xhtml_payload
+        assert "这是第二段，包含 &lt;标签&gt; 与 &amp; 符号。" in xhtml_payload
+    finally:
+        if os.path.exists(txt_file):
+            os.unlink(txt_file)
+        if os.path.exists(epub_file):
+            os.unlink(epub_file)
 
 
 def test_context_progress_is_monotonic():

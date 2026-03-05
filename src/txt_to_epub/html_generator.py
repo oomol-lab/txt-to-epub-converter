@@ -1,5 +1,34 @@
+import html
+import re
 from ebooklib import epub
 from typing import Optional
+
+
+def _escape_text(text: Optional[str], *, quote: bool = False) -> str:
+    """Escape plain text for safe HTML insertion."""
+    return html.escape(text or "", quote=quote)
+
+
+def _render_text_blocks(content: str) -> str:
+    """
+    Render plain text content as standard paragraph HTML.
+
+    The previous implementation wrapped whole chapters in one large <pre>,
+    which is prone to rendering differences across EPUB readers.
+    """
+    normalized = (content or "").replace("\r\n", "\n").replace("\r", "\n").strip()
+    if not normalized:
+        return ""
+
+    paragraphs = []
+    blocks = re.split(r"\n\s*\n+", normalized)
+    for block in blocks:
+        lines = [line.strip() for line in block.split("\n") if line.strip()]
+        if not lines:
+            continue
+        escaped_lines = [_escape_text(line) for line in lines]
+        paragraphs.append(f"<p>{'<br/>'.join(escaped_lines)}</p>")
+    return "\n".join(paragraphs)
 
 
 def _get_illustration_blocks(
@@ -15,10 +44,13 @@ def _get_illustration_blocks(
     if not illustration_href:
         return "", ""
 
-    caption_html = f'<p class="duokan-note">{illustration_caption}</p>' if illustration_caption else ""
+    safe_caption = _escape_text(illustration_caption) if illustration_caption else ""
+    caption_html = f'<p class="duokan-note">{safe_caption}</p>' if safe_caption else ""
+    safe_alt = _escape_text(illustration_caption or "chapter illustration", quote=True)
+    safe_href = _escape_text(illustration_href, quote=True)
     block = (
         f'<div class="duokan-image-single">'
-        f'<img class="duokan-image" src="{illustration_href}" alt="{illustration_caption or "chapter illustration"}"/>'
+        f'<img class="duokan-image" src="{safe_href}" alt="{safe_alt}"/>'
         f'{caption_html}'
         f'</div>'
     )
@@ -40,10 +72,11 @@ def _get_watermark_html(watermark_text: str) -> str:
     if not watermark_text:
         return ""
 
+    safe_watermark = _escape_text(watermark_text)
     return f'''
         <div style="position: fixed; bottom: 2rem; left: 50%; transform: translateX(-50%); width: 100%;">
             <p style="color: #95a5a6; font-size: 0.8em; text-align: center;">
-                {watermark_text}
+                {safe_watermark}
             </p>
         </div>'''
 
@@ -60,19 +93,16 @@ def create_volume_page(volume_title: str, file_name: str, chapter_count: int,
     :return: EpubHtml object
     """
     volume_page = epub.EpubHtml(title=volume_title, file_name=file_name, lang='zh')
+    safe_volume_title = _escape_text(volume_title)
 
-    # Determine unit name and decorative icon
+    # Determine decorative icon
     if "卷" in volume_title:
-        unit_name = "卷"
         icon = "📖"
     elif "部" in volume_title:
-        unit_name = "部"
         icon = "📚"
     elif "篇" in volume_title:
-        unit_name = "篇"
         icon = "📜"
     else:
-        unit_name = "卷"
         icon = "📖"
 
     # Generate watermark HTML
@@ -85,7 +115,7 @@ def create_volume_page(volume_title: str, file_name: str, chapter_count: int,
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>{volume_title}</title>
+        <title>{safe_volume_title}</title>
         <link rel="stylesheet" type="text/css" href="style/nav.css"/>
         <style>
             body {{
@@ -107,7 +137,7 @@ def create_volume_page(volume_title: str, file_name: str, chapter_count: int,
     </head>
     <body class="chinese-text">
         <div class="volume-content">
-            <h1 class="volume-title">{volume_title}</h1>
+            <h1 class="volume-title">{safe_volume_title}</h1>
             <div style="margin-top: 2rem;">
                 <div style="font-size: 3em; margin-bottom: 1.5rem;">{icon}</div>
                 <p style="color: #2c3e50; font-size: 1.3em; font-weight: 500; margin-bottom: 2rem;">
@@ -137,6 +167,8 @@ def create_chapter_page(chapter_title: str, chapter_content: str, file_name: str
     :return: EpubHtml object
     """
     chapter_page = epub.EpubHtml(title=chapter_title, file_name=file_name, lang='zh')
+    safe_chapter_title = _escape_text(chapter_title)
+    rendered_chapter_content = _render_text_blocks(chapter_content)
 
     # Generate watermark HTML
     watermark_html = _get_watermark_html(watermark_text) if watermark_text else ""
@@ -147,14 +179,14 @@ def create_chapter_page(chapter_title: str, chapter_content: str, file_name: str
     )
 
     # Create elegant chapter page content
-    if chapter_content.strip():
+    if rendered_chapter_content:
         chapter_page.content = f'''
         <!DOCTYPE html>
         <html lang="zh">
         <head>
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>{chapter_title}</title>
+            <title>{safe_chapter_title}</title>
             <link rel="stylesheet" type="text/css" href="style/nav.css"/>
             <style>
                 body {{
@@ -176,10 +208,10 @@ def create_chapter_page(chapter_title: str, chapter_content: str, file_name: str
         </head>
         <body class="chinese-text">
             <div class="chapter-content">
-                <h1 class="chapter-title">{chapter_title}</h1>
+                <h1 class="chapter-title">{safe_chapter_title}</h1>
                 {illustration_head}
                 <div style="margin-top: 1.5rem; margin-bottom: 2rem;">
-                    <pre>{chapter_content}</pre>
+                    {rendered_chapter_content}
                 </div>
                 {illustration_tail}
                 <div style="margin-top: 2rem;">
@@ -198,7 +230,7 @@ def create_chapter_page(chapter_title: str, chapter_content: str, file_name: str
         <head>
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>{chapter_title}</title>
+            <title>{safe_chapter_title}</title>
             <link rel="stylesheet" type="text/css" href="style/nav.css"/>
             <style>
                 body {{
@@ -220,7 +252,7 @@ def create_chapter_page(chapter_title: str, chapter_content: str, file_name: str
         </head>
         <body class="chinese-text">
             <div class="chapter-content">
-                <h1 class="chapter-title">{chapter_title}</h1>
+                <h1 class="chapter-title">{safe_chapter_title}</h1>
                 {illustration_head}
                 {illustration_tail}
                 <div style="margin-top: 2rem;">
@@ -247,6 +279,8 @@ def create_section_page(section_title: str, section_content: str, file_name: str
     :return: EpubHtml object
     """
     section_page = epub.EpubHtml(title=section_title, file_name=file_name, lang='zh')
+    safe_section_title = _escape_text(section_title)
+    rendered_section_content = _render_text_blocks(section_content)
 
     if section_title:
         section_page.content = f'''
@@ -255,13 +289,13 @@ def create_section_page(section_title: str, section_content: str, file_name: str
         <head>
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>{section_title}</title>
+            <title>{safe_section_title}</title>
             <link rel="stylesheet" type="text/css" href="style/nav.css"/>
         </head>
         <body class="chinese-text">
-            <h2 class="section-title">{section_title}</h2>
+            <h2 class="section-title">{safe_section_title}</h2>
             <div style="margin-top: 1rem;">
-                <pre>{section_content}</pre>
+                {rendered_section_content}
             </div>
         </body>
         </html>
@@ -279,7 +313,7 @@ def create_section_page(section_title: str, section_content: str, file_name: str
         </head>
         <body class="chinese-text">
             <div style="margin-top: 1rem;">
-                <pre>{section_content}</pre>
+                {rendered_section_content}
             </div>
         </body>
         </html>
@@ -296,27 +330,29 @@ def create_chapter(title: str, content: str, file_name: str, illustration_href: 
     Create EPUB chapter with modern design.
     """
     chapter = epub.EpubHtml(title=title, file_name=file_name, lang='zh')
+    safe_title = _escape_text(title)
+    rendered_content = _render_text_blocks(content)
     illustration_head, illustration_tail = _get_illustration_blocks(
         illustration_href=illustration_href,
         illustration_caption=illustration_caption,
         illustration_position=illustration_position
     )
     
-    if content:
+    if rendered_content:
         chapter.content = f'''
         <!DOCTYPE html>
         <html lang="zh">
         <head>
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>{title}</title>
+            <title>{safe_title}</title>
             <link rel="stylesheet" type="text/css" href="style/nav.css"/>
         </head>
         <body class="chinese-text">
-            <h1 class="chapter-title">{title}</h1>
+            <h1 class="chapter-title">{safe_title}</h1>
             {illustration_head}
             <div style="margin-top: 1.5rem;">
-                <pre>{content}</pre>
+                {rendered_content}
             </div>
             {illustration_tail}
         </body>
@@ -329,11 +365,11 @@ def create_chapter(title: str, content: str, file_name: str, illustration_href: 
         <head>
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>{title}</title>
+            <title>{safe_title}</title>
             <link rel="stylesheet" type="text/css" href="style/nav.css"/>
         </head>
         <body class="chinese-text">
-            <h1 class="chapter-title">{title}</h1>
+            <h1 class="chapter-title">{safe_title}</h1>
             {illustration_head}
             {illustration_tail}
         </body>
