@@ -15,6 +15,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - CLI tool for command-line usage
 - GUI application
 
+## [0.2.8] - 2026-03-05
+
+### Changed
+
+- Patch release for package publishing and version alignment
+
 ## [0.2.4] - 2026-03-04
 
 ### Fixed
@@ -178,7 +184,8 @@ This library was extracted from the Oomol txt-to-epub task and refactored into a
 - Web service API
 - Docker container support
 
-[Unreleased]: https://github.com/yourusername/txt-to-epub-converter/compare/v0.2.4...HEAD
+[Unreleased]: https://github.com/yourusername/txt-to-epub-converter/compare/v0.2.8...HEAD
+[0.2.8]: https://github.com/yourusername/txt-to-epub-converter/compare/v0.2.4...v0.2.8
 [0.2.4]: https://github.com/yourusername/txt-to-epub-converter/compare/v0.2.3...v0.2.4
 [0.2.3]: https://github.com/yourusername/txt-to-epub-converter/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/yourusername/txt-to-epub-converter/compare/v0.2.1...v0.2.2
