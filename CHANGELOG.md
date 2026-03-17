@@ -15,6 +15,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - CLI tool for command-line usage
 - GUI application
 
+## [0.2.9] - 2026-03-17
+
+### Added
+
+- Added optional `fusion_image_api_url` override so external callers can supply a custom Fusion image endpoint for AI cover and illustration generation
+
+### Tests
+
+- Added regression coverage for custom Fusion image endpoint propagation in cover generation and config plumbing
+
 ## [0.2.8] - 2026-03-05
 
 ### Changed
@@ -184,7 +194,8 @@ This library was extracted from the Oomol txt-to-epub task and refactored into a
 - Web service API
 - Docker container support
 
-[Unreleased]: https://github.com/yourusername/txt-to-epub-converter/compare/v0.2.8...HEAD
+[Unreleased]: https://github.com/yourusername/txt-to-epub-converter/compare/v0.2.9...HEAD
+[0.2.9]: https://github.com/yourusername/txt-to-epub-converter/compare/v0.2.8...v0.2.9
 [0.2.8]: https://github.com/yourusername/txt-to-epub-converter/compare/v0.2.4...v0.2.8
 [0.2.4]: https://github.com/yourusername/txt-to-epub-converter/compare/v0.2.3...v0.2.4
 [0.2.3]: https://github.com/yourusername/txt-to-epub-converter/compare/v0.2.2...v0.2.3
