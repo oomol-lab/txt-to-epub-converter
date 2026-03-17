@@ -215,6 +215,9 @@ class ParserConfig:
     ai_cover_context_chars: int = 2000
     """Character count sampled from the beginning of the book for cover context (minimum 1000)."""
 
+    fusion_image_api_url: Optional[str] = None
+    """Optional override for the Fusion image API endpoint used by AI cover/illustration generation."""
+
     hide_unknown_author: bool = True
     """Hide author text on AI cover prompts when author is empty/unknown."""
 
@@ -451,6 +454,7 @@ class ParserConfig:
                 ai_cover_quality=config_data.get('ai_cover_quality', 'standard'),
                 ai_cover_style_hint=config_data.get('ai_cover_style_hint'),
                 ai_cover_context_chars=config_data.get('ai_cover_context_chars', 2000),
+                fusion_image_api_url=config_data.get('fusion_image_api_url'),
                 hide_unknown_author=config_data.get('hide_unknown_author', True),
                 # AI illustration configuration
                 enable_ai_illustrations=config_data.get('enable_ai_illustrations', False),
@@ -526,6 +530,7 @@ class ParserConfig:
             ai_cover_quality=config_dict.get('ai_cover_quality', 'standard'),
             ai_cover_style_hint=config_dict.get('ai_cover_style_hint'),
             ai_cover_context_chars=config_dict.get('ai_cover_context_chars', 2000),
+            fusion_image_api_url=config_dict.get('fusion_image_api_url'),
             hide_unknown_author=config_dict.get('hide_unknown_author', True),
             # AI illustration configuration
             enable_ai_illustrations=config_dict.get('enable_ai_illustrations', False),
@@ -593,6 +598,7 @@ class ParserConfig:
             'ai_cover_quality': self.ai_cover_quality,
             'ai_cover_style_hint': self.ai_cover_style_hint,
             'ai_cover_context_chars': self.ai_cover_context_chars,
+            'fusion_image_api_url': self.fusion_image_api_url,
             'hide_unknown_author': self.hide_unknown_author,
             # AI illustration configuration
             'enable_ai_illustrations': self.enable_ai_illustrations,

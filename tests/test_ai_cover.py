@@ -117,6 +117,49 @@ def test_cover_generator_prefers_fusion_for_llm_oomol_base_url():
     assert generator._should_use_fusion_api() is True
 
 
+def test_cover_generator_accepts_custom_fusion_image_api_url(monkeypatch):
+    from txt_to_epub.ai.cover_generator import CoverGenerator
+
+    captured = {"post_url": None}
+
+    class FakePostResponse:
+        status_code = 200
+
+        @staticmethod
+        def json():
+            return {"data": [{"url": "https://example.com/generated.png"}]}
+
+    class FakeGetResponse:
+        content = b"png-bytes"
+
+        @staticmethod
+        def raise_for_status():
+            return None
+
+    def fake_post(url, **kwargs):
+        captured["post_url"] = url
+        return FakePostResponse()
+
+    def fake_get(url, **kwargs):
+        return FakeGetResponse()
+
+    monkeypatch.setattr("txt_to_epub.ai.cover_generator.requests.post", fake_post)
+    monkeypatch.setattr("txt_to_epub.ai.cover_generator.requests.get", fake_get)
+
+    generator = CoverGenerator(
+        api_key="api-demo",
+        model="google/gemini-2.5-flash-image",
+        fusion_image_api_url="https://example.com/custom-fusion-endpoint"
+    )
+
+    result = generator.generate_cover(title="测试书名", author="作者")
+
+    assert result["success"] is True
+    assert captured["post_url"] == "https://example.com/custom-fusion-endpoint"
+    if result.get("cover_path") and os.path.exists(result["cover_path"]):
+        os.unlink(result["cover_path"])
+
+
 def test_ai_cover_hides_unknown_author_by_default(monkeypatch):
     from txt_to_epub.core import _generate_ai_cover_image
     from txt_to_epub import ParserConfig
@@ -263,3 +306,44 @@ def test_ai_cover_uses_ai_metadata_title_when_input_title_is_source_slug(monkeyp
         assert captured['title'] == '琼明神女录'
         assert captured['author'] == '倒悬山剑气长存'
         assert captured['source_hint'] == 'qm'
+
+
+def test_ai_cover_passes_custom_fusion_image_api_url_from_config(monkeypatch):
+    from txt_to_epub.core import _generate_ai_cover_image
+    from txt_to_epub import ParserConfig
+
+    captured = {'fusion_image_api_url': None}
+
+    class FakeCoverGenerator:
+        def __init__(self, *args, **kwargs):
+            captured['fusion_image_api_url'] = kwargs.get('fusion_image_api_url')
+
+        def generate_cover(self, **kwargs):
+            return {'success': True, 'cover_path': _create_png_file()}
+
+        def get_stats(self):
+            return {'total_calls': 1}
+
+    monkeypatch.setattr('txt_to_epub.ai.CoverGenerator', FakeCoverGenerator)
+
+    config = ParserConfig(
+        enable_ai_cover=True,
+        fusion_image_api_url='https://example.com/fusion-image-api'
+    )
+    cover_path, generated, usage, warnings = _generate_ai_cover_image(
+        content='示例正文',
+        language='chinese',
+        title='无名之书',
+        author='作者',
+        metadata_payload={},
+        config=config
+    )
+
+    try:
+        assert generated is True
+        assert captured['fusion_image_api_url'] == 'https://example.com/fusion-image-api'
+        assert usage['total_calls'] == 1
+        assert warnings == []
+    finally:
+        if cover_path and os.path.exists(cover_path):
+            os.unlink(cover_path)

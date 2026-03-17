@@ -27,6 +27,7 @@ class CoverGenerator:
         organization: str = None,
         size: str = "1024x1536",
         quality: str = "standard",
+        fusion_image_api_url: Optional[str] = None,
     ):
         self.client = LLMClient(api_key=api_key, model=model, base_url=base_url, organization=organization)
         self.model = model
@@ -34,6 +35,7 @@ class CoverGenerator:
         self.quality = quality
         self.api_key = api_key or ""
         self.base_url = base_url or ""
+        self.fusion_image_api_url = (fusion_image_api_url or self.FUSION_IMAGE_API_URL).strip()
         self.stats = {
             "total_calls": 0,
             "total_input_tokens": 0,
@@ -141,7 +143,7 @@ class CoverGenerator:
             payload["size"] = size_obj
 
         response = requests.post(
-            self.FUSION_IMAGE_API_URL,
+            self.fusion_image_api_url,
             headers=headers,
             json=payload,
             timeout=120,

@@ -425,7 +425,8 @@ def _generate_ai_cover_image(
             model=config.ai_cover_model,
             base_url=config.llm_base_url,
             size=config.ai_cover_size,
-            quality=config.ai_cover_quality
+            quality=config.ai_cover_quality,
+            fusion_image_api_url=getattr(config, "fusion_image_api_url", None),
         )
 
         cover_author = author
@@ -813,7 +814,8 @@ def _generate_ai_chapter_illustration(
             model=model_name,
             base_url=config.llm_base_url,
             size=config.ai_illustration_size,
-            quality=config.ai_illustration_quality
+            quality=config.ai_illustration_quality,
+            fusion_image_api_url=getattr(config, "fusion_image_api_url", None),
         )
 
         result = generator.generate_illustration(

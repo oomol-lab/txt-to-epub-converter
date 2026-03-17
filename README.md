@@ -240,7 +240,8 @@ from txt_to_epub import txt_to_epub, ParserConfig
 config = ParserConfig(
     enable_llm_assistance=True,
     llm_api_key="sk-...",
-    llm_model="gpt-4o-mini"  # Fast and cost-effective
+    llm_model="gpt-4o-mini",  # Fast and cost-effective
+    fusion_image_api_url="https://your-proxy.example.com/v1/image/generate"  # Optional Fusion image endpoint override
 )
 
 result = txt_to_epub(
