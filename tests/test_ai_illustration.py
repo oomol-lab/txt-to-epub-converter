@@ -259,3 +259,48 @@ def test_ai_illustration_density_alias_ultra():
     assert policy["max_images_per_book"] == 24
     assert policy["chapter_interval"] == 1
     assert policy["min_chapter_chars"] == 600
+
+
+def test_ai_illustration_english_min_chars_scaled():
+    """English min_chapter_chars should be multiplied by _ENGLISH_CHARS_PER_WORD
+    so that the density preset yields a semantically equivalent illustration
+    cadence for English text (word-count level, not raw character count)."""
+    from txt_to_epub import ParserConfig
+    from txt_to_epub.core import _ENGLISH_CHARS_PER_WORD, _should_generate_chapter_illustration
+
+    # 中 preset: min_chapter_chars=2000, chapter_interval=6
+    config = ParserConfig(
+        enable_ai_illustrations=True,
+        ai_illustration_density="中",
+    )
+
+    # A Chinese chapter with 2000 chars should pass.
+    assert _should_generate_chapter_illustration(
+        chapter_index=7,
+        chapter_text="这是一段足够长的章节内容。" * 170,  # ~2040 chars
+        generated_count=1,
+        config=config,
+        language="chinese",
+    ) is True
+
+    # An English chapter with only 2000 chars should NOT pass (below scaled threshold).
+    short_english = "The hero walked through the dark forest. " * 48  # ~1968 chars
+    assert len(short_english.strip()) < 2000 * _ENGLISH_CHARS_PER_WORD
+    assert _should_generate_chapter_illustration(
+        chapter_index=7,
+        chapter_text=short_english,
+        generated_count=1,
+        config=config,
+        language="english",
+    ) is False
+
+    # An English chapter with enough chars (≥ 2000 * 5 = 10000) should pass.
+    long_english = "The hero walked through the dark forest. " * 250  # ~10250 chars
+    assert len(long_english.strip()) >= 2000 * _ENGLISH_CHARS_PER_WORD
+    assert _should_generate_chapter_illustration(
+        chapter_index=7,
+        chapter_text=long_english,
+        generated_count=1,
+        config=config,
+        language="english",
+    ) is True

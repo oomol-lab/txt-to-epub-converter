@@ -498,13 +498,28 @@ def _resolve_ai_illustration_density(config: ParserConfig) -> Optional[str]:
     return raw or None
 
 
+_ENGLISH_CHARS_PER_WORD = 5
+"""Average English characters per word (including trailing space).
+Used to normalise min_chapter_chars so that the same density preset produces
+a semantically equivalent illustration cadence for both Chinese and English."""
+
+
 def _should_generate_chapter_illustration(
     chapter_index: int,
     chapter_text: str,
     generated_count: int,
-    config: ParserConfig
+    config: ParserConfig,
+    language: str = "chinese",
 ) -> bool:
-    """Check whether the current chapter should generate an illustration."""
+    """Check whether the current chapter should generate an illustration.
+
+    ``language`` should be ``"chinese"`` or ``"english"`` (the value returned by
+    :func:`~txt_to_epub.parser.detect_language`).  For English text the
+    ``min_chapter_chars`` threshold is scaled up by :data:`_ENGLISH_CHARS_PER_WORD`
+    so that the density presets represent a consistent *word-count* gate rather
+    than a raw byte count, giving both languages a semantically equivalent
+    illustration cadence.
+    """
     if not getattr(config, "enable_ai_illustrations", False):
         return False
 
@@ -522,6 +537,8 @@ def _should_generate_chapter_illustration(
         return False
 
     min_chars = max(0, int(policy.get("min_chapter_chars", 0)))
+    if language != "chinese":
+        min_chars = min_chars * _ENGLISH_CHARS_PER_WORD
     if len((chapter_text or "").strip()) < min_chars:
         return False
 
@@ -1160,7 +1177,8 @@ def txt_to_epub(txt_file: str, epub_file: str, title: Optional[str] = None,
                                 chapter_index=chapter_counter,
                                 chapter_text=chapter_sample_text,
                                 generated_count=ai_illustrations_generated,
-                                config=config
+                                config=config,
+                                language=language,
                             )
                             if should_generate_illustration:
                                 ai_illustration_attempted += 1
@@ -1291,7 +1309,8 @@ def txt_to_epub(txt_file: str, epub_file: str, title: Optional[str] = None,
                                 chapter_index=chapter_counter,
                                 chapter_text=chapter_sample_text,
                                 generated_count=ai_illustrations_generated,
-                                config=config
+                                config=config,
+                                language=language,
                             )
                             if should_generate_illustration:
                                 ai_illustration_attempted += 1
