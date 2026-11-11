@@ -75,8 +75,12 @@ def analyze_content_changes(
         analysis['punctuation_reason'] = analysis_msgs['punctuation_decrease']
         analysis['punctuation_concern'] = analysis_msgs['concern_levels']['minor']
 
-    # Analyze overall changes
-    total_loss_rate = (original_stats['total_chars'] - converted_stats['total_chars']) / original_stats['total_chars'] * 100
+    # Analyze overall changes (an empty original has nothing to lose)
+    original_total = original_stats['total_chars']
+    if original_total == 0:
+        total_loss_rate = 0.0
+    else:
+        total_loss_rate = (original_total - converted_stats['total_chars']) / original_total * 100
     if total_loss_rate <= 0.5:
         analysis['overall_reason'] = analysis_msgs['overall_excellent']
         analysis['overall_concern'] = analysis_msgs['concern_levels']['none']
